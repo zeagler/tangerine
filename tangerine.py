@@ -14,7 +14,7 @@ import datetime
 import time
 import os
 
-#from amazon_functions import *
+from amazon_functions import *
 from postgres_functions import *
 from rancher_functions import *
 from slack_functions import *
@@ -208,6 +208,56 @@ def check_hosts():
             deactivate_host(host)
             remove_host(host)
             purge_host(host)
+            
+    for host in list_active_hosts():
+        if "badHost" in host.labels:
+            print "Host '" + host.id + "' has returned to an active state"
+            remove_labels_from_host(host, "badHost")
+
+def check_ec2_fleet(scale_down_timeout):
+    """
+    Scale the Spot Request based on the size of the queue
+    
+    This keeps the scale of the Spot Fleet at 1/3 the sum of the running
+      and ready queue. The hosts are not terminated when the Spot Fleet is
+      scaled down. Instead this function will check if the number of active hosts
+      in Rancher is greater than the target capacity of the Spot Fleet. This
+      function will then terminate an idle instance once per loop to bring the active
+      host count down to match the target capacity.
+      
+    TODO: Add variable scaling rules
+    TODO: Wait variable minutes before terminating
+    """
+    
+    capacity = get_target_capacity()
+    running_tasks = len(get_tasks("state", "running"))
+    ready_tasks = len(get_tasks("state", "ready"))
+    queued_tasks = len(get_tasks("state", "queued"))
+    target = ready_tasks + running_tasks
+    
+    if capacity < target:
+        print "Scaling Up"
+        scale_spot_request(target)
+        scale_down_timeout = 0
+    elif capacity > target:
+        # 30 loops = 30 minutes
+        if scale_down_timeout > 30:
+            print "Scaling down"
+            scale_spot_request(target)
+            scale_down_timeout = 0
+    else:
+        scale_down_timeout += 1
+            
+    # Terminate an EC2 instance if the active amount is more than EC2 capacity 
+    if len(list_active_hosts()) > get_target_capacity():
+        host = get_idle_host()
+        if 'instanceId' in host.labels:
+            deactivate_host(host)
+            terminate_instance(host.labels['instanceId'])
+        else:
+            print "Warning: Host '" + host.id + "' does not have a label 'instanceId'. EC2 Instance can not be terminated"
+    
+    return scale_down_timeout
 
 def check_cron(now, cron):
     """
@@ -257,24 +307,21 @@ def main():
     print "      Rancher Host: " + os.environ['CATTLE_URL']
     print "     Rancher stack: " + os.getenv('TASK_STACK', "Tangerine")
     print "     Slack webhook: " + os.getenv('SLACK_WEBHOOK', "")
+    print "Spot Fleet Request: " + os.getenv('SPOT_FLEET_REQUEST_ID', "")
 
-    # Close postgresql connection on exit
-    atexit.register(close_postgres_connection)
-    
-    # connect to the Postgresql database
-    # Setup the required table if it does not exist
     setup_postgres()
-    
-    # Open a persistant connection to the Rancher API
-    # Get the Stack that will be used by this instance
+    atexit.register(close_postgres_connection)
     connect_to_rancher()
     set_rancher_variables()
+    connect_to_amazon()
     open_slack_webhook()
 
     # use these variable to alternate between functions in the loop
     function_counter = 0
     rancher_host_counter = 0
+    scale_down_timeout = 0
 
+    # TODO give each function call it's own thread
     while True:
         if function_counter == 0: 
             check_queue()
@@ -292,6 +339,10 @@ def main():
             check_cron_tasks()
             function_counter = 4
             
+        elif function_counter == 4:
+            scale_down_timeout = check_ec2_fleet(scale_down_timeout)
+            function_counter = 5
+            
         else:
             check_table()
             function_counter = 0
@@ -302,8 +353,7 @@ def main():
             rancher_host_counter = 0
         else:
             rancher_host_counter += 1
-            
-        
+
         # Sleep 10 seconds between loops
         time.sleep(10)
   

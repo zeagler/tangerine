@@ -26,12 +26,11 @@ def set_rancher_variables():
       TASK_STACK: "Task-Scheduling-Stack"
       HOST_LABEL: "tasks"
     """
-    global environment
-    global host_label
-    global stack
+    global environment, host_label, stack, sidekick_script_path
     
     stack = os.getenv('TASK_STACK', "Tangerine")
     host_label = os.getenv('HOST_LABEL', "tangerine")
+    sidekick_script_path = os.environ['SIDEKICK_SCRIPT_PATH']
     for env in client.list_environment():
         if env.name == stack:
             environment = env
@@ -69,6 +68,9 @@ def list_active_hosts():
     ret_list = []
     for host in list_hosts():
         if host_label in host.labels:
+            if 'status' not in host.labels:
+                add_labels_to_host(host, "status=idle")
+                
             if (host.agentState == 'active' or host.agentState is None) and (host.state == 'active'):
                 ret_list.append(host)
 
@@ -207,7 +209,7 @@ def create_service(host, task):
       secondaryLaunchConfigs=[
         {
           "dataVolumes": ["/var/run/docker.sock:/var/run/docker.sock",
-                          "/home/ubuntu/shared/tangerine/sidekick.sh:/sidekick.sh"],
+                          sidekick_script_path + ":/sidekick.sh"],
           "environment": {"CATTLE_URL": os.environ['CATTLE_URL'],
                           "CATTLE_ACCESS_KEY": os.environ['CATTLE_ACCESS_KEY'],
                           "CATTLE_SECRET_KEY": os.environ['CATTLE_SECRET_KEY'],

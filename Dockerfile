@@ -3,8 +3,8 @@ MAINTAINER zeagler
 
 RUN apt-get update
 RUN apt-get build-dep -y python-psycopg2
-RUN pip install psycopg2
-RUN mkdir /task-scheduler
+RUN pip install psycopg2 boto3
+RUN mkdir /tangerine
 
-COPY *.py README.md /task-scheduler/
-ENTRYPOINT python /task-scheduler/main.py
+COPY *.py README.md /tangerine/
+ENTRYPOINT python /tangerine/tangerine.py

@@ -49,8 +49,8 @@ class Task(object):
         """
         Check on the dependencies of this task.
         
-        Any dependencies that are completed get moved to another column `satisfied_dependencies`
-          if the `dependencies` column is empty this will return False. Otherwise it will be True
+        Any dependencies that are completed are removed from the object. If the
+          `dependencies` column is empty this will return False. Otherwise it will be True
         
         Returns:
             A boolean that represents whether this task is still waiting on a dependency
@@ -59,25 +59,16 @@ class Task(object):
         # If the dependencies attribute is None, NULL, or empty this task is not waiting on any other task
         if not self.dependencies:
             return False
-        
-        cur = conn.cursor()
-        cur.execute("SELECT name, state FROM "+table+" WHERE state='success' AND name=ANY(ARRAY"+str(self.dependencies)+");")
-        completed_dependencies = cur.fetchall()
-        
-        # if any rows were returned they will be move to `satisfied_dependencies`
-        if completed_dependencies:
-            # Set satisfied_dependencies to an empty list if it is None
-            if not self.satisfied_dependencies:
-                self.satisfied_dependencies = []
 
-            # loop through returned rows. dep[0] is the task name in each row
+        cur = conn.cursor()
+        cur.execute("SELECT name, state FROM "+table+" WHERE (state='success' OR state='cron') AND name=ANY(ARRAY"+str(self.dependencies)+");")
+        completed_dependencies = cur.fetchall()
+
+        # loop through returned rows. dep[0] is the task name in each row
+        if completed_dependencies:
             for dep in completed_dependencies:
                 self.dependencies.remove(dep[0])
-                self.satisfied_dependencies.append(dep[0])
-            
-            self.update("dependencies", "{" + str(self.dependencies)[1:-1] + "}")
-            self.update("satisfied_dependencies", "{" + str(self.satisfied_dependencies)[1:-1] + "}")
-        
+
         # If dependencies exist this task is still waiting, otherwise it is not
         if self.dependencies:
             return True
@@ -96,9 +87,14 @@ def open_postgres_connection():
     print "Connecting to postgreSQL database"
     host = os.environ['PGHOST']
     user = os.environ['PGUSER']
+    pswd = os.getenv('PGPASS', '')
     port = os.getenv('PGPORT', "5432")
     dbname = os.getenv('PGDATABASE', user)
-    conn = psycopg2.connect("host="+host+" dbname="+dbname+" user="+user+" port="+port)
+    
+    if pswd:
+        conn = psycopg2.connect("host="+host+" dbname="+dbname+" user="+user+" port="+port+" password="+pswd)
+    else:
+        conn = psycopg2.connect("host="+host+" dbname="+dbname+" user="+user+" port="+port)
 
 def close_postgres_connection():
     """Close the postgreSQL database connection"""
@@ -112,8 +108,7 @@ def create_task_database():
 CREATE TABLE """+table+""" (
     name                     varchar(100)  PRIMARY KEY,
     state                    varchar(10)   NOT NULL DEFAULT 'queued',
-    dependencies             integer[]     NOT NULL DEFAULT '{}',
-    satisfied_dependencies   integer[]     NOT NULL DEFAULT '{}',
+    dependencies             varchar[]     NOT NULL DEFAULT '{}',
     command                  varchar[]     NOT NULL DEFAULT '{}',
     recoverable_exitcodes    integer[]     NOT NULL DEFAULT '{}',
     restartable              boolean       NOT NULL DEFAULT true,

@@ -4,7 +4,6 @@ This module is used to send messages to a slack webhook
 
 from urllib import urlencode
 import urllib2
-import json
 import os
 
 def open_slack_webhook():
@@ -18,7 +17,7 @@ def open_slack_webhook():
         opener = urllib2.build_opener(urllib2.HTTPHandler())
         req = urllib2.Request(webhook)
     else:
-        print "SLACK_WEBHOOK is blank, Slack notifications will be disabled"
+        print "SLACK_WEBHOOK is not set, Slack notifications will be disabled"
         enabled = False
 
 def send_message(message):
