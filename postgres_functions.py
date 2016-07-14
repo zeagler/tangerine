@@ -14,19 +14,16 @@ class Task(object):
         update: Update this task's column in the postgreSQL task table
         waiting_on_dependencies: check if this task still has unmet dependencies
     """
-    def __init__(self, values):
+    def __init__(self, values, postgres):
         """
         Set the initial attributes of this task object
 
         Args:
             input: the results of a `SELECT *` query on the task table
         """
-        cur = conn.cursor()
-        cur.execute("select column_name from information_schema.columns where table_name='"+table+"';")
-        columns = cur.fetchall()
-          
-        for i in xrange(len(columns)):
-            setattr(self, columns[i][0], values[i])
+        setattr(self, "postgres", postgres)
+        for i in xrange(len(self.postgres.columns)):
+            setattr(self, self.postgres.columns[i][0], values[i])
     
     def __repr__(self):
         """Return a string representation of all the attributes of this task"""
@@ -41,113 +38,144 @@ class Task(object):
             value: The new value to be set
         """
         setattr(self, column, value)
-        cur = conn.cursor()
-        cur.execute("UPDATE "+table+" SET "+column+"='"+str(value)+"' WHERE name='"+str(self.name)+"';")
-        conn.commit()
+        cur = self.postgres.conn.cursor()
+        cur.execute("UPDATE "+self.postgres.table+" SET "+column+"='"+str(value)+"' WHERE name='"+str(self.name)+"';")
+        self.postgres.conn.commit()
     
     def waiting_on_dependencies(self):
         """
         Check on the dependencies of this task.
         
-        Any dependencies that are completed are removed from the object. If the
-          `dependencies` column is empty this will return False. Otherwise it will be True
+        Loop through the in-memory copy of the tasks to find the dependencies and their state.
+          If any dependency is in the queued, ready, running or failed state this task
+          is not ready to be scheduled.
         
         Returns:
             A boolean that represents whether this task is still waiting on a dependency
         """
         
-        # If the dependencies attribute is None, NULL, or empty this task is not waiting on any other task
+        # If the dependencies attribute is None, NULL or empty
+        #   this task is not waiting on any other task
         if not self.dependencies:
             return False
+        
+        completed_dependencies = 0
+        for task in self.postgres.tasks:
+            if task.name in self.dependencies:
+                if task.state == "success" or task.state == "cron":
+                    completed_dependencies += 1
 
-        cur = conn.cursor()
-        cur.execute("SELECT name, state FROM "+table+" WHERE (state='success' OR state='cron') AND name=ANY(ARRAY"+str(self.dependencies)+");")
-        completed_dependencies = cur.fetchall()
-
-        # loop through returned rows. dep[0] is the task name in each row
-        if completed_dependencies:
-            for dep in completed_dependencies:
-                self.dependencies.remove(dep[0])
-
-        # If dependencies exist this task is still waiting, otherwise it is not
-        if self.dependencies:
-            return True
-        else:
+        if completed_dependencies == len(self.dependencies):
             return False
+        else:
+            return True
 
 
-def open_postgres_connection():
+    def cron_is_satisfied(self, now):
+        """
+        Compare a cron configuration with a given time
+        
+        Args:
+            now: An array of cron values of the current time [minute, hour, day of month, month, weekday]
+            
+        Returns: True if the time satisfies the cron configuration, otherwise False
+        """
+        for i in reversed(range(5)):
+            if self.cron[i] == "*":
+                continue
+
+            # Parse cron lists and ranges
+            else:
+                expanded_cron = []
+                for item in self.cron[i].split(","):
+                    if "-" in item:
+                        for item in range(int(item.split("-")[0]), int(item.split("-")[1])+1):
+                            expanded_cron.append(str(item))
+                    else:
+                        expanded_cron.append(item)
+
+                if str(now[i]) not in expanded_cron:
+                    return False
+                  
+        return True
+
+
+class Postgres():
     """
     Open a persistant postgreSQL database connection.
     
-    This uses the standard postgreSQL enviroment variables for the username, host,
-      port, and database name. The password is retrieved through the .pgpass file
+    This uses the standard postgreSQL enviroment variables for the username, password,
+      host, port, and database name. The password is retrieved through the .pgpass file
+      if it is not set as an enviroment variable.
     """
-    global conn
-    print "Connecting to postgreSQL database"
-    host = os.environ['PGHOST']
-    user = os.environ['PGUSER']
-    pswd = os.getenv('PGPASS', '')
-    port = os.getenv('PGPORT', "5432")
-    dbname = os.getenv('PGDATABASE', user)
-    
-    if pswd:
-        conn = psycopg2.connect("host="+host+" dbname="+dbname+" user="+user+" port="+port+" password="+pswd)
-    else:
-        conn = psycopg2.connect("host="+host+" dbname="+dbname+" user="+user+" port="+port)
+    def __init__(self):
+        print "Connecting to postgreSQL database"
+        setattr(self, "host", os.environ['PGHOST'])
+        setattr(self, "user", os.environ['PGUSER'])
+        setattr(self, "pswd", os.getenv('PGPASS', ''))
+        setattr(self, "port", os.getenv('PGPORT', "5432"))
+        setattr(self, "dbname", os.getenv('PGDATABASE', self.user))
+        
+        conn_str = "host="+self.host+" dbname="+self.dbname+" user="+self.user+" port="+self.port
+        if self.pswd: conn_str += " password="+self.pswd
 
-def close_postgres_connection():
-    """Close the postgreSQL database connection"""
-    print '\n\nclosing postgres connection'
-    conn.close()
+        setattr(self, "conn", psycopg2.connect(conn_str))
+        setattr(self, "table", os.getenv('TASK_TABLE', "tangerine"))
 
-def create_task_database():
-    """Create the task table in the postgreSQL database"""
-    cur = conn.cursor()
-    cur.execute("""
-CREATE TABLE """+table+""" (
-    name                     varchar(100)  PRIMARY KEY,
-    state                    varchar(10)   NOT NULL DEFAULT 'queued',
-    dependencies             varchar[]     NOT NULL DEFAULT '{}',
-    command                  varchar[]     NOT NULL DEFAULT '{}',
-    recoverable_exitcodes    integer[]     NOT NULL DEFAULT '{}',
-    restartable              boolean       NOT NULL DEFAULT true,
-    entrypoint               varchar[]     NOT NULL DEFAULT '{}',
-    datavolumes              varchar[]     NOT NULL DEFAULT '{}',
-    environment              varchar[][2]  NOT NULL DEFAULT '{}',
-    imageuuid                varchar       NOT NULL,
-    service_id               varchar(10)   NOT NULL DEFAULT '',
-    failures                 integer       NOT NULL DEFAULT 0,
-    cron                     varchar[]
-);""")
-    conn.commit()
+        # Check if task table exists, create it if it does not
+        cur = self.conn.cursor()
+        cur.execute("select exists(select * from information_schema.tables where table_name='"+self.table+"')")
+        if not cur.fetchone()[0]:
+            cur.execute("""
+            CREATE TABLE """+self.table+""" (
+                name                     varchar(100)  PRIMARY KEY,
+                state                    varchar(10)   NOT NULL DEFAULT 'queued',
+                dependencies             varchar[]     NOT NULL DEFAULT '{}',
+                command                  varchar[]     NOT NULL DEFAULT '{}',
+                recoverable_exitcodes    integer[]     NOT NULL DEFAULT '{}',
+                restartable              boolean       NOT NULL DEFAULT true,
+                entrypoint               varchar[]     NOT NULL DEFAULT '{}',
+                datavolumes              varchar[]     NOT NULL DEFAULT '{}',
+                environment              varchar[][2]  NOT NULL DEFAULT '{}',
+                imageuuid                varchar       NOT NULL,
+                service_id               varchar(10)   NOT NULL DEFAULT '',
+                failures                 integer       NOT NULL DEFAULT 0,
+                max_failures             integer       NOT NULL DEFAULT 3,
+                cron                     varchar[]
+            );""")
+            self.conn.commit()
+            
+        cur = self.conn.cursor()
+        cur.execute("select column_name from information_schema.columns where table_name='"+self.table+"';")
+        setattr(self, "columns", cur.fetchall())
+        setattr(self, "tasks", [])
+        self.refresh_tasks()
+        
+    def close_connection(self):
+        """Close the postgreSQL database connection"""
+        print '\n\nclosing postgres connection'
+        self.conn.close()
 
-def setup_postgres():
-    """
-    Connect to the postgreSQL database
-    Create the task table if it does not exist
-    """
-    global table
-    table = os.getenv('TASK_TABLE', "tangerine")
-    open_postgres_connection()
+    def get_tasks(self, column, value):
+        """
+        Get all tasks whose column matches input value
+        
+        Args:
+            column: The column that will be searched
+            value: The required value of the column
+        
+        Returns:
+            A list of Task objects, one for each row that satisfies column=value
+        """
+        ret_val = []
+        for task in self.tasks:
+            if task.__dict__[column] == value:
+                ret_val.append(task)
+        return ret_val
 
-    # Check if task table exists, create it if it does not
-    cur = conn.cursor()
-    cur.execute("select exists(select * from information_schema.tables where table_name='"+table+"')")
-    if not cur.fetchone()[0]:
-        create_task_database()
-
-def get_tasks(column, value):
-    """
-    Get all tasks whose column matches input value
-    
-    Args:
-        column: The column that will be searched
-        value: The required value of the column
-    
-    Returns:
-        A list of Task objects, one for each row that satisfies column=value
-    """
-    cur = conn.cursor()
-    cur.execute("SELECT * FROM "+table+" WHERE "+column+"='"+value+"'")
-    return [Task(row) for row in cur.fetchall()]
+    def refresh_tasks(self):
+        """Refresh the in memory copy of the tasks"""
+        cur = self.conn.cursor()
+        cur.execute("SELECT * FROM "+self.table)
+        self.tasks = [Task(row, self) for row in cur.fetchall()]
+        return

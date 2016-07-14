@@ -73,7 +73,9 @@ Rancher API variables are required `CATTLE_URL` `CATTLE_ACCESS_KEY` `CATTLE_SECR
 `SLACK_WEBHOOK` If you use Slack notifications, leaving this blank will disable notifications.  
 `SPOT_FLEET_REQUEST_ID` If you want to use Spot Fleet auto-scaling, leaving this blank willl disable the feature.  
 `EC2_SCALE_LIMIT` Default 20. The maximum amount of instances Tangerine will be allowed to scale to.  
-If you want to use Spot Fleet scaling, Tangerine will need to be running on an EC2 instance with an IAM role with appropriate permissions.  
+If you want to use Spot Fleet scaling, Tangerine can use the standard AWS config profiles or you can set the Amazon CLI environment variables  
+If Tangerine is running on an EC2 instance you can set up an IAM role with appropriate permissions and set the variable `AWS_DEFAULT_REGION`.  
+`TZ` The timezone to compare cron configurations. The default is the system timezone.  
 
 ### Hosts
 Hosts are discovered through Rancher. The Rancher agents need to have a few host labels at boot up.  
@@ -99,6 +101,7 @@ CREATE TABLE tangerine (
     imageuuid                varchar       NOT NULL,
     service_id               varchar(10)   NOT NULL DEFAULT '',
     failures                 integer       NOT NULL DEFAULT 0,
+    max_failures             integer       NOT NULL DEFAULT 3,
     cron                     varchar[]
 );
 ```
@@ -115,4 +118,5 @@ Example Insert: `INSERT INTO tangerine (name, command, datavolumes, environment,
 `imageuuid`: The docker image to run, prefixed with `docker:` eg: `docker:ubuntu:16.04`  
 `service_id`: Set by Tangerine, This tracks the service id of the task in Ranchers  
 `failures`: Set by Tangerine, the amount of times the task has failed. 3 is the hardcoded limit for the time being.  
+`max_failures`: The amount of failures allowed before the task is not rescheduled.  
 `cron`: The cron schedule on which to restart succeeded tasks.  

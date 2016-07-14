@@ -6,27 +6,26 @@ from urllib import urlencode
 import urllib2
 import os
 
-def open_slack_webhook():
-    """Setup the global variables used in this module"""
-    global opener, req, payload, enabled
-    
-    webhook = os.getenv('SLACK_WEBHOOK', "")
-    if webhook:
-        print "Setting up slack notifications"
-        enabled = True
-        opener = urllib2.build_opener(urllib2.HTTPHandler())
-        req = urllib2.Request(webhook)
-    else:
-        print "SLACK_WEBHOOK is not set, Slack notifications will be disabled"
-        enabled = False
+class Slack(object):
+    def __init__(self):
+        """Setup the slack integration"""
+        webhook = os.getenv('SLACK_WEBHOOK', "")
+        if webhook:
+            print "Setting up slack notifications"
+            setattr(self, "slack_enabled", True)
+            setattr(self, "opener", urllib2.build_opener(urllib2.HTTPHandler()))
+            setattr(self, "req", urllib2.Request(webhook))
+        else:
+            print "SLACK_WEBHOOK is not set, Slack notifications will be disabled"
+            setattr(self, "slack_enabled", False)
 
-def send_message(message):
-    """
-    Send a message to the Slack webhook
-    
-    Args:
-        message: The String message to be sent
-    """
-    if enabled:
-        data = urlencode({"payload": '{"username": "tangerine", "text": "'+message+'", "icon_emoji": ":tangerine:"}'})
-        opener.open(req, data.encode('utf-8'))
+    def send_message(self, message):
+        """
+        Send a message to the Slack webhook
+        
+        Args:
+            message: The String message to be sent
+        """
+        if self.slack_enabled:
+            data = urlencode({"payload": '{"username": "tangerine", "text": "'+message+'", "icon_emoji": ":tangerine:"}'})
+            self.opener.open(self.req, data.encode('utf-8'))
