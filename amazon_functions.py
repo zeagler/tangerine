@@ -2,18 +2,18 @@
 This module has functions to scale Spot Fleet Requests and terminate
   EC2 instances.
 """
-import boto3
-import os
+from boto3 import client
+from os import getenv, environ
 
 class Amazon():
     def __init__(self):
-        setattr(self, "ec2_scale_limit", os.getenv('EC2_SCALE_LIMIT', 20))
-        setattr(self, "spot_fleet_request", os.getenv('SPOT_FLEET_REQUEST_ID', ""))
+        setattr(self, "ec2_scale_limit", getenv('EC2_SCALE_LIMIT', 20))
+        setattr(self, "spot_fleet_request", getenv('SPOT_FLEET_REQUEST_ID', ""))
         
         if self.spot_fleet_request:
             print "Connecting to Amazon EC2"
             setattr(self, "aws_enabled", True)
-            setattr(self, "ec2", boto3.client('ec2'))
+            setattr(self, "ec2", client('ec2'))
         else:
             print "SPOT_FLEET_REQUEST_ID is not set, Spot Request scaling will be disabled"
             setattr(self, "aws_enabled", False)

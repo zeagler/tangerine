@@ -2,8 +2,8 @@
 This module has functions to connect to a postgreSQL database, and a class
   to represent each task.
 """
-import psycopg2
-import os
+from psycopg2 import connect
+from os import getenv, environ
 
 class Task(object):
     """
@@ -110,17 +110,17 @@ class Postgres():
     """
     def __init__(self):
         print "Connecting to postgreSQL database"
-        setattr(self, "host", os.environ['PGHOST'])
-        setattr(self, "user", os.environ['PGUSER'])
-        setattr(self, "pswd", os.getenv('PGPASS', ''))
-        setattr(self, "port", os.getenv('PGPORT', "5432"))
-        setattr(self, "dbname", os.getenv('PGDATABASE', self.user))
+        setattr(self, "host", environ['PGHOST'])
+        setattr(self, "user", environ['PGUSER'])
+        setattr(self, "pswd", getenv('PGPASS', ''))
+        setattr(self, "port", getenv('PGPORT', "5432"))
+        setattr(self, "dbname", getenv('PGDATABASE', self.user))
         
         conn_str = "host="+self.host+" dbname="+self.dbname+" user="+self.user+" port="+self.port
         if self.pswd: conn_str += " password="+self.pswd
 
-        setattr(self, "conn", psycopg2.connect(conn_str))
-        setattr(self, "table", os.getenv('TASK_TABLE', "tangerine"))
+        setattr(self, "conn", connect(conn_str))
+        setattr(self, "table", getenv('TASK_TABLE', "tangerine"))
 
         # Check if task table exists, create it if it does not
         cur = self.conn.cursor()

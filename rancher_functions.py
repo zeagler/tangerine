@@ -1,8 +1,8 @@
 """
 This module has functions to connect to and communicate with the Rancher API
 """
-import os
-import cattle
+from cattle import Client
+from os import getenv, environ
 
 class Host(object):
     def __init__(self, host, client):
@@ -29,12 +29,12 @@ class Host(object):
         if 'remove' in self.host.actions:
             self.host.remove()
         
-    def restore_host(self):
+    def restore(self):
         """Restore a host if it is in a valid state"""
         if 'restore' in self.host.actions:
             self.host.restore()
         
-    def purge_host(self):
+    def purge(self):
         """Purge a host if it is in a valid state"""
         if 'purge' in self.host.actions:
             self.host.purge()
@@ -78,17 +78,17 @@ class Rancher(object):
     def __init__(self):
         print "Connecting to the Rancher API"
         
-        setattr(self, "url", os.environ['CATTLE_URL'])
-        setattr(self, "access_key", os.environ['CATTLE_ACCESS_KEY'])
-        setattr(self, "secret_key", os.environ['CATTLE_SECRET_KEY'])
+        setattr(self, "url", environ['CATTLE_URL'])
+        setattr(self, "access_key", environ['CATTLE_ACCESS_KEY'])
+        setattr(self, "secret_key", environ['CATTLE_SECRET_KEY'])
         
-        setattr(self, "client", cattle.Client(url=self.url,
-                                              access_key=self.access_key,
-                                              secret_key=self.secret_key))
+        setattr(self, "client", Client(url=self.url,
+                                       access_key=self.access_key,
+                                       secret_key=self.secret_key))
         
-        setattr(self, "stack", os.getenv('TASK_STACK', "Tangerine"))
-        setattr(self, "host_label", os.getenv('HOST_LABEL', "tangerine"))
-        setattr(self, "sidekick_script_path", os.environ['SIDEKICK_SCRIPT_PATH'])
+        setattr(self, "stack", getenv('TASK_STACK', "Tangerine"))
+        setattr(self, "host_label", getenv('HOST_LABEL', "tangerine"))
+        setattr(self, "sidekick_script_path", environ['SIDEKICK_SCRIPT_PATH'])
         
         # Loop through the Rancher stacks to get tangerine's stack as an object
         for env in self.client.list_environment():
@@ -112,13 +112,13 @@ class Rancher(object):
         """
         for container in self.client.list_container():
             if 'io.rancher.stack_service.name' in container.labels.keys():
-                if container.labels['io.rancher.stack_service.name'] == self.stack + "/" + self.service:
+                if container.labels['io.rancher.stack_service.name'] == self.stack + "/" + service:
                     return container
         return None
 
     def get_host_by_id(self, hostId):
         """Return the host that has the specified hostId"""
-        return Host(self.client.by_id_host(hostId))
+        return Host(self.client.by_id_host(hostId), self.client)
 
     def list_hosts(self):
         """Return all the hosts in the environment"""

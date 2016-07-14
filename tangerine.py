@@ -9,16 +9,16 @@ The hosts are discovered through the Rancher API. Only hosts with a
   user-defined label: `$HOST_LABEL` will be chosen to recieve tasks.
 """
 
-import atexit
-import datetime
-import os
 import thread
-import time
+from atexit import register
+from datetime import datetime
+from os import getenv, environ
+from time import sleep
 
-from amazon_functions import *
-from postgres_functions import *
-from rancher_functions import *
-from slack_functions import *
+from amazon_functions import Amazon
+from postgres_functions import Postgres
+from rancher_functions import Rancher
+from slack_functions import Slack
 
 def check_queue():
     """
@@ -233,6 +233,7 @@ def check_ec2_fleet():
     TODO: Add variable scaling rules
     TODO: Wait variable minutes before terminating
     """
+    global scale_down_timeout
     capacity = amazon.get_target_capacity()
     if capacity is None:
         return
@@ -272,7 +273,7 @@ def check_cron_tasks():
     Check all tasks that have a cron schedule set. If the current time matches the cron
       configuration then it put in the waiting queue.
     """
-    dt = datetime.datetime.now()
+    dt = datetime.now()
     now = [dt.minute, dt.hour, dt.day, dt.month, dt.weekday()]
 
     for task in postgres.get_tasks("state", "cron"):
@@ -282,15 +283,15 @@ def check_cron_tasks():
 
 def main():
     print "Starting Tangerine"
-    print "  postgreSQL table: " + os.getenv('TASK_TABLE', "tangerine")
-    print "      Rancher Host: " + os.environ['CATTLE_URL']
-    print "     Rancher stack: " + os.getenv('TASK_STACK', "Tangerine")
-    print "     Slack webhook: " + os.getenv('SLACK_WEBHOOK', "")
-    print "Spot Fleet Request: " + os.getenv('SPOT_FLEET_REQUEST_ID', "")
+    print "  postgreSQL table: " + getenv('TASK_TABLE', "tangerine")
+    print "      Rancher Host: " + environ['CATTLE_URL']
+    print "     Rancher stack: " + getenv('TASK_STACK', "Tangerine")
+    print "     Slack webhook: " + getenv('SLACK_WEBHOOK', "")
+    print "Spot Fleet Request: " + getenv('SPOT_FLEET_REQUEST_ID', "")
 
     global postgres, rancher, amazon, slack, scale_down_timeout
     postgres = Postgres()
-    atexit.register(postgres.close_connection)
+    register(postgres.close_connection) # Close postgres connection at exit
     rancher = Rancher()
     amazon = Amazon()
     slack = Slack()
@@ -316,7 +317,7 @@ def main():
         rancher_host_counter = (rancher_host_counter + 1)%16
 
         # Sleep 10 seconds between loops
-        time.sleep(10)
+        sleep(10)
   
 if __name__ == '__main__':
     status = main()

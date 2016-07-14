@@ -2,14 +2,14 @@
 This module is used to send messages to a slack webhook
 """
 
-from urllib import urlencode
 import urllib2
-import os
+from urllib import urlencode
+from os import getenv
 
 class Slack(object):
     def __init__(self):
         """Setup the slack integration"""
-        webhook = os.getenv('SLACK_WEBHOOK', "")
+        webhook = getenv('SLACK_WEBHOOK', "")
         if webhook:
             print "Setting up slack notifications"
             setattr(self, "slack_enabled", True)
