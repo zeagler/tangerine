@@ -13,12 +13,14 @@ import thread
 from atexit import register
 from datetime import datetime
 from os import getenv, environ
-from time import sleep
+from time import sleep, strftime
+import sys
 
 from amazon_functions import Amazon
 from postgres_functions import Postgres
 from rancher_functions import Rancher
 from slack_functions import Slack
+from statuspage import start_statuspage
 
 def check_queue():
     """
@@ -31,8 +33,11 @@ def check_queue():
         if task.waiting_on_dependencies():
             print "Task '" + task.name + "' still has unmet dependencies. It will stay in the waiting queue"
         else:
-            print "Task '" + task.name + "' has it's dependencies met. It will be put in the ready queue"
-            task.update("state", "ready")
+            if task.delay:
+                task.update("delay", task.delay-1)
+            else:
+                print "Task '" + task.name + "' has it's dependencies met. It will be put in the ready queue"
+                task.update("state", "ready")
 
 def check_ready():
     """
@@ -49,6 +54,7 @@ def check_ready():
                 print "Task '" + task.name + "' has started running on service '" + service.id + "'"
                 task.update("state", "running")
                 task.update("service_id", service.id)
+                task.update("count", task.count + 1)
                 host.add_labels("status=busy")
             else:
                 print "A service has failed to start for task '" + task.name + "' on host '" + host.id + "'"
@@ -86,6 +92,7 @@ def check_running():
                     task.update("state", "queued")
                 else:
                     print "Host '" + host.id + "' has been marked as a bad host, task '" + task.name + "' will not be rescheduled as it was created with restartable=false"
+                    slack.send_message("Host '" + host.id + "' has been marked as a bad host, task '" + task.name + "' will not be rescheduled as it was created with restartable=false")
                     task.update("state", "failed")
                     
                 task.update("service_id", "")
@@ -106,33 +113,36 @@ def check_running():
         # Otherwise the tasks state is set to `queued` and will be rescheduled
         elif 'exitCode' in host.labels.keys():
             if host.labels['exitCode'] == "0":
-                task.update("max_failures", 0)
+                task.update("failures", 0)
                 if task.cron:
                     task.update("state", "cron")
                 else:
                     task.update("state", "success")
                 
                 print "Task '" + task.name + "' has completed successfully"
+                slack.send_message("Task '" + task.name + "' has completed successfully")
 
-            elif host.labels['exitCode'] not in task.recoverable_exitcodes or 0 not in task.recoverable_exitcodes:
+            elif host.labels['exitCode'] not in task.recoverable_exitcodes and 0 not in task.recoverable_exitcodes:
                 task.update("state", "failed")
                 print "Task '" + task.name + "' failed with error code '" +host.labels['exitCode']+ "'. It will not be rescheduled"
-                # TODO: Send something to Slack
+                slack.send_message("Task '" + task.name + "' failed with error code '" +host.labels['exitCode']+ "'. It will not be rescheduled")
               
             elif not task.restartable:
                 task.update("state", "failed")
                 print "Task '" + task.name + "' failed, it will not restart as it was inserted into the table as non-restartable"
+                slack.send_message("Task '" + task.name + "' failed, it will not restart as it was inserted into the table as non-restartable")
             
-            elif task.failures < task.max_failures:
+            elif (task.failures + 1) <= task.max_failures:
                 task.update("failures", task.failures + 1)
                 task.update("state", "queued")
+                task.update("delay", task.reschedule_delay)
                 print "Task '" + task.name + "' failed with error code '" + host.labels['exitCode'] + "', it will attempt to be rescheduled " + str(task.max_failures-task.failures) + " more time(s)"
             
             else:
                 task.update("failures", task.failures + 1)
                 task.update("state", "failed")
-                print "Task '" + task.name + "' has failed "+task.max_failures+" times, it will not be rescheduled"
-                # TODO: Message Slack
+                print "Task '" + task.name + "' has failed "+str(task.max_failures)+" times, it will not be rescheduled"
+                slack.send_message("Task '" + task.name + "' has failed "+str(task.max_failures)+" times, it will not be rescheduled")
 
             task.update("service_id", "")
             host.remove_labels("exitCode,badContainer")
@@ -176,17 +186,13 @@ def check_table():
     postgres.refresh_tasks()
     
     if (not postgres.get_tasks("state", "running")) and (not postgres.get_tasks("state", "ready")):
-        # TODO: check cron jobs
         if not postgres.get_tasks("state", "queued"):
             print "No Tasks are running or in the queue"
             # Send one time message to slack stating that tasks are done only if there are no failures
         else:
             # Check waiting queue before sending out an error message
-            # This is the code from check_queue
             for task in postgres.get_tasks("state", "queued"):
                 if not task.waiting_on_dependencies():
-                    print "Task '" + task.name + "' has it's dependencies met. It will be put in the ready queue"
-                    task.update("state", "ready")
                     return
 
             print "There are tasks with un-met dependencies, but there are no tasks in the queue"
@@ -229,9 +235,11 @@ def check_ec2_fleet():
       in Rancher is greater than the target capacity of the Spot Fleet. This
       function will then terminate an idle instance once per loop to bring the active
       host count down to match the target capacity.
-      
+    
+    TODO: Scale 1 at a time
     TODO: Add variable scaling rules
     TODO: Wait variable minutes before terminating
+    TODO: Scale up timeout
     """
     global scale_down_timeout
     capacity = amazon.get_target_capacity()
@@ -241,19 +249,24 @@ def check_ec2_fleet():
     running_tasks = len(postgres.get_tasks("state", "running"))
     ready_tasks = len(postgres.get_tasks("state", "ready"))
     target = ready_tasks + running_tasks
+    if (target == 0): target = 1
     
     if capacity < target:
         amazon.scale_spot_request(target)
+        slack.send_message("Scaling spot fleet request up to " + str(target) + " hosts")
         scale_down_timeout = 0
         return
-    elif capacity > target and capacity is not 1:
+    elif capacity > target:
         # 30 loops = 30 minutes
         if scale_down_timeout > 30:
             amazon.scale_spot_request(target)
+            slack.send_message("Scaling spot fleet request down to " + str(target) + " hosts")
             scale_down_timeout = 0
             return
         else:
             scale_down_timeout += 1
+    elif capacity == target:
+        scale_down_timeout = 0
 
     # Terminate an EC2 instance if the active amount is more than EC2 capacity
     hosts = rancher.list_active_hosts()
@@ -280,6 +293,7 @@ def check_cron_tasks():
         if task.cron_is_satisfied(now):
             task.update("state", "queued")
             print "Task '" + task.name + "' has been put in the queue on it's cron schedule"
+            slack.send_message("Task '" + task.name + "' has been put in the queue on it's cron schedule")
 
 def main():
     print "Starting Tangerine"
@@ -295,6 +309,7 @@ def main():
     rancher = Rancher()
     amazon = Amazon()
     slack = Slack()
+    thread.start_new_thread(start_statuspage, (postgres, ))
 
     # use these variable to alternate between functions in the loop
     function_counter = 0
@@ -305,9 +320,9 @@ def main():
         if   function_counter == 0: thread.start_new_thread(check_queue, ())
         elif function_counter == 1: thread.start_new_thread(check_ready, ())
         elif function_counter == 2: thread.start_new_thread(check_running, ())
-        elif function_counter == 3: thread.start_new_thread(check_cron_tasks, ())  
-        elif function_counter == 4: thread.start_new_thread(check_ec2_fleet, ()) 
-        else: thread.start_new_thread(check_table, ()) 
+        elif function_counter == 3: thread.start_new_thread(check_cron_tasks, ())
+        elif function_counter == 4: thread.start_new_thread(check_ec2_fleet, ())
+        else: thread.start_new_thread(check_table, ())
 
         # Check on hosts every 2.5 minutes
         if rancher_host_counter >= 15: thread.start_new_thread(check_hosts, ())
@@ -318,7 +333,19 @@ def main():
 
         # Sleep 10 seconds between loops
         sleep(10)
-  
+
 if __name__ == '__main__':
-    status = main()
+    if len(sys.argv) > 1:
+        if (sys.argv[1] == "load"):
+            print "WIP"
+            status = 0
+        elif (sys.argv[1] == "statuspage"):
+            sys.argv[1] = ""
+            postgres = Postgres()
+            status = start_statuspage(postgres)
+        else:
+            status = main()
+    else:
+        status = main()
+        
     exit(status)

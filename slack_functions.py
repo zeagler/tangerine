@@ -9,12 +9,10 @@ from os import getenv
 class Slack(object):
     def __init__(self):
         """Setup the slack integration"""
-        webhook = getenv('SLACK_WEBHOOK', "")
-        if webhook:
+        setattr(self, "webhook", getenv('SLACK_WEBHOOK', ""))
+        if self.webhook:
             print "Setting up slack notifications"
             setattr(self, "slack_enabled", True)
-            setattr(self, "opener", urllib2.build_opener(urllib2.HTTPHandler()))
-            setattr(self, "req", urllib2.Request(webhook))
         else:
             print "SLACK_WEBHOOK is not set, Slack notifications will be disabled"
             setattr(self, "slack_enabled", False)
@@ -28,4 +26,6 @@ class Slack(object):
         """
         if self.slack_enabled:
             data = urlencode({"payload": '{"username": "tangerine", "text": "'+message+'", "icon_emoji": ":tangerine:"}'})
-            self.opener.open(self.req, data.encode('utf-8'))
+            opener = urllib2.build_opener(urllib2.HTTPHandler())
+            req = urllib2.Request(self.webhook)
+            opener.open(req, data.encode('utf-8'))

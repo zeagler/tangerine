@@ -55,6 +55,7 @@ If you want to run Tangerine outside of Docker you will need to install:
   Rancher API python library: https://github.com/rancher/cattle-cli `pip install cattle`  
   psycopg2 library for postgres: `sudo apt-get install python-psycopg2` or `pip install psycopg2`  
   boto3 for Amazon `pip install boto3`
+  web.py for the status page `pip install web.py`
 
 Check the environment section below to ensure you have your environment set up properly then clone the repository and run the program.  
 `git clone https://github.com/zeagler/tangerine.git`  
@@ -81,7 +82,7 @@ If Tangerine is running on an EC2 instance you can set up an IAM role with appro
 Hosts are discovered through Rancher. The Rancher agents need to have a few host labels at boot up.  
 `tangerine` This tells Tangerine that the host is intended to managed by it. Only hosts with this label will be given tasks. This can be replaced with the `HOST_LABEL` environment variable.  
 `status=idle` The host status is used to indicate availablility. This label is modified to `busy` by Tangerine when a task is scheduled.  
-`instanceId=$(wget -q -O - http://instance-data/latest/meta-data/instance-id)` If you are using Spot Fleet autoscaling you will need to have this host label set. This is so Tangerine can ensure only idle hosts are getting terminated when scaling down. If this is not set the hosts will not be terminated automatically after the Spot Fleet is scaled down.
+`instanceId=$(wget -q -O - http://instance-data/latest/meta-data/instance-id)` If you are using Spot Fleet autoscaling you will need to have this host label set. This is so Tangerine can ensure only idle hosts are getting terminated when scaling down. If this is not set the hosts will not be terminated automatically after the Spot Fleet is scaled down.  
 
 ### Task Table
 The task table will be created if it is not already present. Tangerine doesn't have a way to populate a table yet. To create a task you need to run an `INSERT` statement from another tool like psql.

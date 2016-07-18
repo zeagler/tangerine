@@ -4,6 +4,7 @@ This module has functions to connect to a postgreSQL database, and a class
 """
 from psycopg2 import connect
 from os import getenv, environ
+from time import strftime
 
 class Task(object):
     """
@@ -22,8 +23,18 @@ class Task(object):
             input: the results of a `SELECT *` query on the task table
         """
         setattr(self, "postgres", postgres)
-        for i in xrange(len(self.postgres.columns)):
+        for i in xrange(len(values)):
             setattr(self, self.postgres.columns[i][0], values[i])
+        
+        # Interpolate enviroment variables
+        for i in xrange(len(self.environment)):
+            self.environment[i][1] = self.environment[i][1].replace("$$count", str(self.count))
+            self.environment[i][1] = self.environment[i][1].replace("$$date", strftime("%Y%m%d"))
+            self.environment[i][1] = self.environment[i][1].replace("$$time", strftime("%H%M%S"))
+        
+        # For the status page
+        setattr(self, "dependencies_str", ', '.join(self.dependencies))
+        setattr(self, "cron_str", ', '.join(self.cron))
     
     def __repr__(self):
         """Return a string representation of all the attributes of this task"""
@@ -138,10 +149,13 @@ class Postgres():
                 datavolumes              varchar[]     NOT NULL DEFAULT '{}',
                 environment              varchar[][2]  NOT NULL DEFAULT '{}',
                 imageuuid                varchar       NOT NULL,
-                service_id               varchar(10)   NOT NULL DEFAULT '',
+                cron                     varchar[]     NOT NULL DEFAULT '{}',
                 failures                 integer       NOT NULL DEFAULT 0,
                 max_failures             integer       NOT NULL DEFAULT 3,
-                cron                     varchar[]
+                service_id               varchar(10)   NOT NULL DEFAULT '',
+                count                    integer       NOT NULL DEFAULT 0,
+                delay                    integer       NOT NULL DEFAULT 0,
+                reschedule_delay         integer       NOT NULL DEFAULT 5
             );""")
             self.conn.commit()
             
