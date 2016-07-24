@@ -1,115 +1,9 @@
 """
-This module has functions to connect to a postgreSQL database, and a class
-  to represent each task.
+This module has functions to connect to a postgreSQL database
 """
 from psycopg2 import connect
-from os import getenv, environ
-from time import strftime
-
-class Task(object):
-    """
-    This class is used to represent and manipulate a row in the task table
-    All columns of the table become attributes of this object
-    
-    Methods:
-        update: Update this task's column in the postgreSQL task table
-        waiting_on_dependencies: check if this task still has unmet dependencies
-    """
-    def __init__(self, values, postgres):
-        """
-        Set the initial attributes of this task object
-
-        Args:
-            input: the results of a `SELECT *` query on the task table
-        """
-        setattr(self, "postgres", postgres)
-        for i in xrange(len(values)):
-            setattr(self, self.postgres.columns[i][0], values[i])
-        
-        # Interpolate enviroment variables
-        for i in xrange(len(self.environment)):
-            self.environment[i][1] = self.environment[i][1].replace("$$count", str(self.count))
-            self.environment[i][1] = self.environment[i][1].replace("$$date", strftime("%Y%m%d"))
-            self.environment[i][1] = self.environment[i][1].replace("$$time", strftime("%H%M%S"))
-        
-        # For the status page
-        setattr(self, "dependencies_str", ', '.join(self.dependencies))
-        setattr(self, "cron_str", ', '.join(self.cron))
-    
-    def __repr__(self):
-        """Return a string representation of all the attributes of this task"""
-        return ', '.join("%s: %s" % item for item in vars(self).items())
-
-    def update(self, column, value):
-        """
-        Update the value of a column in this task's row
-        
-        Args
-            column: The column that will be updated
-            value: The new value to be set
-        """
-        setattr(self, column, value)
-        cur = self.postgres.conn.cursor()
-        cur.execute("UPDATE "+self.postgres.table+" SET "+column+"='"+str(value)+"' WHERE name='"+str(self.name)+"';")
-        self.postgres.conn.commit()
-    
-    def waiting_on_dependencies(self):
-        """
-        Check on the dependencies of this task.
-        
-        Loop through the in-memory copy of the tasks to find the dependencies and their state.
-          If any dependency is in the queued, ready, running or failed state this task
-          is not ready to be scheduled.
-        
-        Returns:
-            A boolean that represents whether this task is still waiting on a dependency
-        """
-        
-        # If the dependencies attribute is None, NULL or empty
-        #   this task is not waiting on any other task
-        if not self.dependencies:
-            return False
-        
-        completed_dependencies = 0
-        for task in self.postgres.tasks:
-            if task.name in self.dependencies:
-                if task.state == "success" or task.state == "cron":
-                    completed_dependencies += 1
-
-        if completed_dependencies == len(self.dependencies):
-            return False
-        else:
-            return True
-
-
-    def cron_is_satisfied(self, now):
-        """
-        Compare a cron configuration with a given time
-        
-        Args:
-            now: An array of cron values of the current time [minute, hour, day of month, month, weekday]
-            
-        Returns: True if the time satisfies the cron configuration, otherwise False
-        """
-        for i in reversed(range(5)):
-            if self.cron[i] == "*":
-                continue
-
-            # Parse cron lists and ranges
-            else:
-                expanded_cron = []
-                for item in self.cron[i].split(","):
-                    if "-" in item:
-                        for item in range(int(item.split("-")[0]), int(item.split("-")[1])+1):
-                            expanded_cron.append(str(item))
-                    else:
-                        expanded_cron.append(item)
-
-                if str(now[i]) not in expanded_cron:
-                    return False
-                  
-        return True
-
+from settings import Postgresql as options
+from task import Task
 
 class Postgres():
     """
@@ -120,57 +14,73 @@ class Postgres():
       if it is not set as an enviroment variable.
     """
     def __init__(self):
-        print "Connecting to postgreSQL database"
-        setattr(self, "host", environ['PGHOST'])
-        setattr(self, "user", environ['PGUSER'])
-        setattr(self, "pswd", getenv('PGPASS', ''))
-        setattr(self, "port", getenv('PGPORT', "5432"))
-        setattr(self, "dbname", getenv('PGDATABASE', self.user))
-        
-        conn_str = "host="+self.host+" dbname="+self.dbname+" user="+self.user+" port="+self.port
-        if self.pswd: conn_str += " password="+self.pswd
+        setattr(self, "host", options['PGHOST'])
+        setattr(self, "user", options['PGUSER'])
+        setattr(self, "pswd", options['PGPASS'])
+        setattr(self, "port", options['PGPORT'])
+        setattr(self, "dbname", options['PGDATABASE'])
+        setattr(self, "table", options['TASK_TABLE'])
 
+        conn_str = "host="+self.host+" dbname="+self.dbname+" user="+self.user+" port="+str(self.port)
+        if self.pswd: conn_str += " password="+self.pswd
         setattr(self, "conn", connect(conn_str))
-        setattr(self, "table", getenv('TASK_TABLE', "tangerine"))
 
         # Check if task table exists, create it if it does not
         cur = self.conn.cursor()
         cur.execute("select exists(select * from information_schema.tables where table_name='"+self.table+"')")
         if not cur.fetchone()[0]:
-            cur.execute("""
-            CREATE TABLE """+self.table+""" (
-                name                     varchar(100)  PRIMARY KEY,
-                state                    varchar(10)   NOT NULL DEFAULT 'queued',
-                dependencies             varchar[]     NOT NULL DEFAULT '{}',
-                command                  varchar[]     NOT NULL DEFAULT '{}',
-                recoverable_exitcodes    integer[]     NOT NULL DEFAULT '{}',
-                restartable              boolean       NOT NULL DEFAULT true,
-                entrypoint               varchar[]     NOT NULL DEFAULT '{}',
-                datavolumes              varchar[]     NOT NULL DEFAULT '{}',
-                environment              varchar[][2]  NOT NULL DEFAULT '{}',
-                imageuuid                varchar       NOT NULL,
-                cron                     varchar[]     NOT NULL DEFAULT '{}',
-                failures                 integer       NOT NULL DEFAULT 0,
-                max_failures             integer       NOT NULL DEFAULT 3,
-                service_id               varchar(10)   NOT NULL DEFAULT '',
-                count                    integer       NOT NULL DEFAULT 0,
-                delay                    integer       NOT NULL DEFAULT 0,
-                reschedule_delay         integer       NOT NULL DEFAULT 5
-            );""")
-            self.conn.commit()
-            
+            self.create_task_table()
+
+        # Check if the authorized user table exists, create it if it does not
+        cur = self.conn.cursor()
+        cur.execute("select exists(select * from information_schema.tables where table_name='authorized_users')")
+        if not cur.fetchone()[0]:
+            self.create_user_table()
+
+        # Get the column names
         cur = self.conn.cursor()
         cur.execute("select column_name from information_schema.columns where table_name='"+self.table+"';")
         setattr(self, "columns", cur.fetchall())
-        setattr(self, "tasks", [])
-        self.refresh_tasks()
-        
+        print("Connected to postgreSQL database")
+
     def close_connection(self):
         """Close the postgreSQL database connection"""
-        print '\n\nclosing postgres connection'
+        print('\n\nclosing postgres connection')
         self.conn.close()
-
-    def get_tasks(self, column, value):
+        
+    def create_task_table(self):
+        """Create the table to track tasks"""
+        cur = self.conn.cursor()
+        cur.execute("""
+        CREATE TABLE """+self.table+""" (
+            name                     varchar(100)  PRIMARY KEY,
+            state                    varchar(10)   NOT NULL DEFAULT 'queued',
+            dependencies             varchar[]     NOT NULL DEFAULT '{}',
+            command                  varchar[]     NOT NULL DEFAULT '{}',
+            recoverable_exitcodes    integer[]     NOT NULL DEFAULT '{}',
+            restartable              boolean       NOT NULL DEFAULT true,
+            entrypoint               varchar[]     NOT NULL DEFAULT '{}',
+            datavolumes              varchar[]     NOT NULL DEFAULT '{}',
+            environment              varchar[][2]  NOT NULL DEFAULT '{}',
+            imageuuid                varchar       NOT NULL,
+            cron                     varchar(100)  NOT NULL DEFAULT '',
+            next_run_time            integer,
+            last_run_time            integer,
+            last_success_time        integer,
+            last_fail_time           integer,
+            failures                 integer       NOT NULL DEFAULT 0,
+            max_failures             integer       NOT NULL DEFAULT 3,
+            service_id               varchar(10)   NOT NULL DEFAULT '',
+            count                    integer       NOT NULL DEFAULT 0,
+            delay                    integer       NOT NULL DEFAULT 0,
+            reschedule_delay         integer       NOT NULL DEFAULT 5
+        );""")
+        self.conn.commit()
+            
+    #
+    # Begin task queries
+    #
+    def get_tasks(self, column=None, value=None):
         """
         Get all tasks whose column matches input value
         
@@ -181,15 +91,123 @@ class Postgres():
         Returns:
             A list of Task objects, one for each row that satisfies column=value
         """
-        ret_val = []
-        for task in self.tasks:
-            if task.__dict__[column] == value:
-                ret_val.append(task)
-        return ret_val
-
-    def refresh_tasks(self):
-        """Refresh the in memory copy of the tasks"""
         cur = self.conn.cursor()
-        cur.execute("SELECT * FROM "+self.table)
-        self.tasks = [Task(row, self) for row in cur.fetchall()]
-        return
+        if column == None:
+            cur.execute("SELECT * FROM "+self.table+";")
+        elif value == None:
+            cur.execute("SELECT * FROM "+self.table+" WHERE "+column+"='NULL';")
+        else:
+            cur.execute("SELECT * FROM "+self.table+" WHERE "+column+"='"+value+"';")
+        
+        ret_val = []
+        for task in cur.fetchall():
+            ret_val.append(Task(task, self))
+        return ret_val
+    
+    def update_task(self, name, column, value):
+        """Update a single task"""
+        # TODO: ensure a lock is placed on the table
+        
+        # Stopping a task has extra steps
+        if column == "state" and value == "stopped":
+            self.stop_task(name)
+            return True
+        elif column == "state" and value == "queued":
+            self.queue_task(name)
+            return True
+        else:
+            cur = self.conn.cursor()
+            
+            if value == None:
+                cur.execute("UPDATE "+self.table+" SET "+column+"=NULL WHERE name='"+name+"';")
+            else:
+                cur.execute("UPDATE "+self.table+" SET "+column+"='"+value+"' WHERE name='"+name+"';")
+                
+            self.conn.commit()
+
+            cur = self.conn.cursor()
+            
+            # check that the row was updated
+            cur.execute("SELECT "+column+" FROM "+self.table+" WHERE name='"+name+"';")
+            if cur.fetchone()[0] == value:
+                return True
+            else:
+                return False
+
+    def add_task(self, name, state, dep, image, command, entrypoint, cron,
+                 restartable, exitcodes, max_failures, delay, faildelay,
+                 environment, datavolumes):
+        """Insert a task into the table"""
+        
+        env = ["{" + e.split("=")[0] + "," + e.split("=")[1] + "}" for e in environment.split(",")]
+        
+        cur = self.conn.cursor()
+        cur.execute("INSERT INTO "+self.table+"(name, state, dependencies, imageuuid, command, entrypoint, " + \
+                                               "cron, restartable, recoverable_exitcodes, max_failures, delay, " + \
+                                               "reschedule_delay, environment, datavolumes) " + \
+                    "VALUES ('"+name+"','"+state+"','{"+dep+"}','"+image+"','{"+command.replace(" ", ",")+"}','{"+entrypoint.replace(" ", ",")+"}'," + \
+                    "'"+cron+"',"+restartable+",'{"+exitcodes+"}','"+max_failures+"','"+delay+"','"+faildelay+"','{"+",".join(env)+"}','{"+datavolumes+"}');")
+    
+        self.conn.commit()
+        
+        # check that the row was entered
+        cur.execute("SELECT name FROM "+self.table+" WHERE name='"+name+"';")
+        if cur.fetchone()[0] == name:
+            return True
+        else:
+            return False
+        
+    def queue_task(self, name):
+        """Stop a task"""
+        # TODO: ensure a lock is placed on the database table
+        
+        cur = self.conn.cursor()
+        cur.execute("SELECT * FROM "+self.table+" WHERE name='"+name+"';")
+        task = Task(cur.fetchone(), self)
+        task.queue("misfire")
+        
+    def stop_task(self, name):
+        """Stop a task"""
+        # TODO: ensure a lock is placed on the database table
+        
+        cur = self.conn.cursor()
+        cur.execute("SELECT * FROM "+self.table+" WHERE name='"+name+"';")
+        task = Task(cur.fetchone(), self)
+        task.stop()
+    
+    def delete_task(self, name):
+        """Delete a task definition"""
+        # TODO: ensure a lock is placed on the database table
+        # TODO: you can only delete a stopped task
+        
+        cur = self.conn.cursor()
+        cur.execute("DELETE FROM "+self.table+" WHERE name='"+name+"';")
+        self.conn.commit()
+        
+        # check that the row was deleted
+        cur.execute("SELECT name FROM "+self.table+" WHERE name='"+name+"';")
+        if cur.fetchone()[0] == None:
+            return True
+        else:
+            return False
+        
+    #
+    # Begin tangerine administration queries
+    #
+    def create_user_table(self):
+        """Create the table to store authorized users"""
+        cur = self.conn.cursor()
+        cur.execute("""
+        CREATE TABLE authorized_users (
+            userid    integer       PRIMARY KEY,
+            username  varchar(100)  NOT NULL UNIQUE,
+            usertype  varchar(10)   NOT NULL DEFAULT 'user'
+        );""")
+        self.conn.commit()
+
+    def get_user(self, userid):
+        """Get the informaton about the user"""
+        cur = self.conn.cursor()
+        cur.execute("SELECT * FROM authorized_users WHERE userid='" + str(userid) + "';")
+        return cur.fetchone()
+        

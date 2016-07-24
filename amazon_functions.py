@@ -4,19 +4,15 @@ This module has functions to scale Spot Fleet Requests and terminate
 """
 from boto3 import client
 from os import getenv, environ
+from settings import Amazon as options
 
 class Amazon():
     def __init__(self):
-        setattr(self, "ec2_scale_limit", getenv('EC2_SCALE_LIMIT', 20))
-        setattr(self, "spot_fleet_request", getenv('SPOT_FLEET_REQUEST_ID', ""))
-        
-        if self.spot_fleet_request:
-            print "Connecting to Amazon EC2"
-            setattr(self, "aws_enabled", True)
+        if options['ENABLED']:
             setattr(self, "ec2", client('ec2'))
+            print "Connected to Amazon EC2"
         else:
-            print "SPOT_FLEET_REQUEST_ID is not set, Spot Request scaling will be disabled"
-            setattr(self, "aws_enabled", False)
+            print "Spot Request scaling is disabled"
 
     def scale_spot_request(self, new_capacity):
         """
@@ -25,14 +21,14 @@ class Amazon():
         Args:
             new_capacity: The integer capacity you want to scale the request to
         """
-        if self.aws_enabled:
-            if new_capacity > self.ec2_scale_limit:
-                new_capacity = self.ec2_scale_limit
+        if options['ENABLED']:
+            if new_capacity > options['EC2_SCALE_LIMIT']:
+                new_capacity = options['EC2_SCALE_LIMIT']
             if new_capacity <= 0:
                 new_capacity = 1
             
             request = self.ec2.modify_spot_fleet_request(
-                SpotFleetRequestId=self.spot_fleet_request,
+                SpotFleetRequestId=options['SPOT_FLEET_REQUEST_ID'],
                 TargetCapacity=new_capacity,
                 ExcessCapacityTerminationPolicy='noTermination'
             )
@@ -44,21 +40,21 @@ class Amazon():
 
     def get_target_capacity(self):
         """Return the current target capacity of the Spot Request"""
-        if self.aws_enabled:
-            response = self.ec2.describe_spot_fleet_requests(SpotFleetRequestIds=[self.spot_fleet_request])    
+        if options['ENABLED']:
+            response = self.ec2.describe_spot_fleet_requests(SpotFleetRequestIds=[options['SPOT_FLEET_REQUEST_ID']])    
             return response['SpotFleetRequestConfigs'][0]['SpotFleetRequestConfig']['TargetCapacity']
         else:
             return None
 
     def get_instance_id_by_ip(self, private_ip):
         """Return the instance ID of an EC2 Instance with the provided private ip"""
-        if self.aws_enabled:
+        if options['ENABLED']:
             response = self.ec2.describe_instances(Filters=[{'Name': 'private-ip-address', 'Values': [private_ip]}])
             return response['Reservations'][0]['Instances'][0]['InstanceId']
 
     def terminate_instance(self, instance_id):
         """Terminate an EC2 instance"""
-        if self.aws_enabled:
+        if options['ENABLED']:
             print "Terminating EC2 Instance " + instance_id
             response = self.ec2.terminate_instances(InstanceIds=[instance_id])
 

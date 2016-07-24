@@ -1,0 +1,32 @@
+Amazon:
+  ENABLED: True
+  EC2_SCALE_LIMIT: 20
+  SPOT_FLEET_REQUEST_ID: sfr-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+  
+# Leave PGPASS is blank if you are using a pgpass file
+Postgresql:
+  PGHOST: localhost
+  PGPASS: postgres
+  PGPORT: 5432
+  PGUSER: postgres
+  PGDATABASE: postgres
+  TASK_TABLE: tangerine
+
+Rancher:
+  CATTLE_URL: https://localhost:8080
+  CATTLE_ACCESS_KEY: xxxxxxxxxxxxxxxxxxxx
+  CATTLE_SECRET_KEY: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+  HOST_LABEL: tangerine
+  TASK_STACK: Tangerine
+  SIDEKICK_SCRIPT_PATH: /home/ubuntu/shared/tangerine/sidekick.sh
+
+Slack:
+  ENABLED: True
+  SLACK_WEBHOOK: https://hooks.slack.com/services/Txxxxxxxx/Bxxxxxxxx/xxxxxxxxxxxxxxxxxxxxxxxx
+
+Web:
+  GITHUB_OAUTH_ID: xxxxxxxxxxxxxxxxxxxx
+  GITHUB_OAUTH_SECRET: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+  SSL_CERTIFICATE: cert.pem
+  SSL_PRIVATE_KEY: privkey.pem
+  SSL_CERTIFICATE_CHAIN: 

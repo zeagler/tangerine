@@ -2,7 +2,7 @@
 This module has functions to connect to and communicate with the Rancher API
 """
 from cattle import Client
-from os import getenv, environ
+from settings import Rancher as options
 
 class Host(object):
     def __init__(self, host, client):
@@ -76,24 +76,23 @@ class Rancher(object):
       services and modify the host states and labels.
     """
     def __init__(self):
-        print "Connecting to the Rancher API"
-        
-        setattr(self, "url", environ['CATTLE_URL'])
-        setattr(self, "access_key", environ['CATTLE_ACCESS_KEY'])
-        setattr(self, "secret_key", environ['CATTLE_SECRET_KEY'])
+        setattr(self, "url", options['CATTLE_URL'])
+        setattr(self, "access_key", options['CATTLE_ACCESS_KEY'])
+        setattr(self, "secret_key", options['CATTLE_SECRET_KEY'])
         
         setattr(self, "client", Client(url=self.url,
                                        access_key=self.access_key,
                                        secret_key=self.secret_key))
         
-        setattr(self, "stack", getenv('TASK_STACK', "Tangerine"))
-        setattr(self, "host_label", getenv('HOST_LABEL', "tangerine"))
-        setattr(self, "sidekick_script_path", environ['SIDEKICK_SCRIPT_PATH'])
+        setattr(self, "stack", options['TASK_STACK'])
+        setattr(self, "host_label", options['HOST_LABEL'])
+        setattr(self, "sidekick_script_path", options['SIDEKICK_SCRIPT_PATH'])
         
         # Loop through the Rancher stacks to get tangerine's stack as an object
         for env in self.client.list_environment():
             if env.name == self.stack:
                 setattr(self, "environment", env)
+                print "Connected to the Rancher API"
                 return
         
         # This only executes if the above for loop can't find the stack in Rancher

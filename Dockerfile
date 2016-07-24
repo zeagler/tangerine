@@ -9,7 +9,8 @@ RUN apk add --no-cache --update \
             python \
             python-dev \
             py-pip \
-    && pip install boto3 cattle psycopg2 web.py \
+            tzdata \
+    && pip install boto3 cattle cherrypy croniter mako psycopg2 pyyaml \
     && apk del --purge gcc musl-dev python-dev py-pip \
     && rm -rf /var/cache/apk/* \
     && rm -rf /root/.cache/pip
@@ -17,6 +18,6 @@ RUN apk add --no-cache --update \
 RUN mkdir /tangerine
 
 COPY *.py README.md /tangerine/
-COPY static /tangerine/static
+COPY UI /tangerine/UI
 CMD ["python", "tangerine.py"]
 WORKDIR /tangerine
