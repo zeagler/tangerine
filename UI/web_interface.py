@@ -9,6 +9,7 @@ import json
 import cherrypy
 from hashlib import sha256
 from settings import Web as options
+from API import API
 
 from mako.template import Template
 from mako.lookup import TemplateLookup
@@ -33,7 +34,11 @@ class Statuspage(object):
             
             if cherrypy.session["_ident"] == sha256(agent).hexdigest():
                 tmpl = lookup.get_template("index.html.mako")
-                return tmpl.render(tasks = postgres.get_tasks())
+                return tmpl.render(
+                                   username = cherrypy.session['username'],
+                                   userimageurl = cherrypy.session['userimageurl'],
+                                   usertype = cherrypy.session['usertype']
+                                  )
             
             # Kill the current session
             else:
@@ -43,7 +48,8 @@ class Statuspage(object):
                 raise cherrypy.HTTPRedirect("/")
 
         # if the `code` parameter was POSTed, try to authenticate the user
-        elif code:
+        #elif code:
+        if code:
             # First check that the code is valid
             # Query GitHub for an access token for the code
             git_auth = "https://github.com/login/oauth/access_token?" + \
@@ -71,9 +77,10 @@ class Statuspage(object):
                 data = json.load(res)
                 
                 # if the user is in the authorized user list
-                user_data = postgres.get_user(data['id'])
-                if user_data:
-                    if user_data[1] == data['login']:
+                userdata = API.get_users(userid=str(data['id']))
+                if userdata:    
+                    user_data = userdata[0]
+                    if user_data.username == data['login']:
                         # Modify the user session to indicated authorization
 
                         # store a SHA of the inital request information
@@ -87,12 +94,16 @@ class Statuspage(object):
                         
                         # Store user information in the session
                         cherrypy.session["authorized"] = "true"
-                        cherrypy.session["userid"] = user_data[0]
-                        cherrypy.session["username"] = user_data[1]
-                        cherrypy.session["usertype"] = user_data[2]
+                        cherrypy.session["userid"] = user_data.userid
+                        cherrypy.session["username"] = user_data.username
+                        cherrypy.session["usertype"] = user_data.usertype
+                        cherrypy.session["userimageurl"] = data['avatar_url']
                         
-                        # Send the authorized user to the main page
-                        raise cherrypy.HTTPRedirect("/")
+                        # Send the authorized user to the main page or previous request
+                        redirect = cherrypy.session.get("redirect", "/")
+                        if redirect == "/get_tasks":
+                            redirect = "/"
+                        raise cherrypy.HTTPRedirect(redirect)
                     
                     else:
                         return "Login failed. User '" + data['login'] + "' is not authorized"
@@ -127,63 +138,221 @@ class Statuspage(object):
         cherrypy.session.regenerate()
         tmpl = lookup.get_template("login.html.mako")
         return tmpl.render(client_id = options['GITHUB_OAUTH_ID'])
-
-    @cherrypy.expose
-    def update(self, name=None, column=None, value=None):
-        # Redirect HTTP to HTTPS
-        if cherrypy.request.scheme == "http":
-            redirect_url = cherrypy.request.base
-            redirect_url = redirect_url.replace(":" + str(cherrypy.request.local.port), "")
-            redirect_url = redirect_url.replace("http:", "https:")
-            raise cherrypy.HTTPRedirect(redirect_url)
-          
-        # if the session isn't authorized send the user to the login
-        if not cherrypy.session.get("authorized", None):
-            raise cherrypy.HTTPRedirect("/")
-        
-        if postgres.update_task(name, column, value):
-            return "True"
-        else:
-            return "False"
-   
-    @cherrypy.expose
-    def add_task(self, name=None, state=None, dep=None, image=None, command=None, entrypoint=None,
-                cron=None, restartable=None, exitcodes=None, max_failures=None, delay=None, faildelay=None,
-                environment=None, datavolumes=None):
-        # Redirect HTTP to HTTPS
-        if cherrypy.request.scheme == "http":
-            redirect_url = cherrypy.request.base
-            redirect_url = redirect_url.replace(":" + str(cherrypy.request.local.port), "")
-            redirect_url = redirect_url.replace("http:", "https:")
-            raise cherrypy.HTTPRedirect(redirect_url)
-          
-        # if the session isn't authorized send the user to the login
-        if not cherrypy.session.get("authorized", None):
-            raise cherrypy.HTTPRedirect("/")
-        
-        if not name: return "False"
-        if not (state == "queued" or state == "success" or state == "stopped"): return "False"
-        if not image: return "False"
       
-        postgres.add_task(
-                name = name,
-                state = state,
-                dep = dep,
-                image = image,
-                command = command,
-                entrypoint = entrypoint,
-                cron = cron,
-                restartable = restartable,
-                exitcodes = exitcodes,
-                max_failures = max_failures,
-                delay = delay,
-                faildelay = faildelay,
-                environment = environment,
-                datavolumes = datavolumes
-               )
-        return "True"
+    @cherrypy.expose
+    def logout(self):
+        # Redirect HTTP to HTTPS
+        if cherrypy.request.scheme == "http":
+            redirect_url = cherrypy.request.base
+            redirect_url = redirect_url.replace(":" + str(cherrypy.request.local.port), "")
+            redirect_url = redirect_url.replace("http:", "https:")
+            raise cherrypy.HTTPRedirect(redirect_url)
 
+        # Kill the current session
+        cherrypy.session.clear()
+        cherrypy.session.delete()
+        cherrypy.lib.sessions.expire()
+        raise cherrypy.HTTPRedirect("/")
+    
+    @cherrypy.expose
+    def update_task_form(self, id=None, clone=False):
+        # Redirect HTTP to HTTPS
+        if cherrypy.request.scheme == "http":
+            redirect_url = cherrypy.request.base
+            redirect_url = redirect_url.replace(":" + str(cherrypy.request.local.port), "")
+            redirect_url = redirect_url.replace("http:", "https:")
+            raise cherrypy.HTTPRedirect(redirect_url)
+          
+        # if the session isn't authorized send the user to the login
+        if not cherrypy.session.get("authorized", None):
+            cherrypy.session["redirect"] = cherrypy.request.wsgi_environ['REQUEST_URI']
+            raise cherrypy.HTTPRedirect("/")
+        
+        tmpl = lookup.get_template("update_task.html.mako")
+        return tmpl.render(task = API.get_task_object(id), clone=clone)
+      
+    @cherrypy.expose
+    def new_task_form(self, id=None):
+        # Redirect HTTP to HTTPS
+        if cherrypy.request.scheme == "http":
+            redirect_url = cherrypy.request.base
+            redirect_url = redirect_url.replace(":" + str(cherrypy.request.local.port), "")
+            redirect_url = redirect_url.replace("http:", "https:")
+            raise cherrypy.HTTPRedirect(redirect_url)
+          
+        # if the session isn't authorized send the user to the login
+        if not cherrypy.session.get("authorized", None):
+            cherrypy.session["redirect"] = cherrypy.request.wsgi_environ['REQUEST_URI']
+            raise cherrypy.HTTPRedirect("/")
+        
+        tmpl = lookup.get_template("new_task.html.mako")
+        return tmpl.render()
+      
+    @cherrypy.expose
+    def add_task_form(self):
+        # Redirect HTTP to HTTPS
+        if cherrypy.request.scheme == "http":
+            redirect_url = cherrypy.request.base
+            redirect_url = redirect_url.replace(":" + str(cherrypy.request.local.port), "")
+            redirect_url = redirect_url.replace("http:", "https:")
+            raise cherrypy.HTTPRedirect(redirect_url)
+          
+        # if the session isn't authorized send the user to the login
+        if not cherrypy.session.get("authorized", None):
+            cherrypy.session["redirect"] = cherrypy.request.wsgi_environ['REQUEST_URI']
+            raise cherrypy.HTTPRedirect("/")
+        
+        tmpl = lookup.get_template("new_task.html.mako")
+        return tmpl.render()
 
+    @cherrypy.expose
+    def display_task(self, id=None):
+        # Redirect HTTP to HTTPS
+        if cherrypy.request.scheme == "http":
+            redirect_url = cherrypy.request.base
+            redirect_url = redirect_url.replace(":" + str(cherrypy.request.local.port), "")
+            redirect_url = redirect_url.replace("http:", "https:")
+            raise cherrypy.HTTPRedirect(redirect_url)
+          
+        # if the session isn't authorized send the user to the login
+        if not cherrypy.session.get("authorized", None):
+            cherrypy.session["redirect"] = cherrypy.request.wsgi_environ['REQUEST_URI']
+            raise cherrypy.HTTPRedirect("/")
+        
+        tmpl = lookup.get_template("display_task.html.mako")
+        return tmpl.render(task = API.get_task_object(id))
+            
+    
+    # TODO: Give dvl, env, prt better names
+    @cherrypy.expose
+    def add_task(self, id=None, name=None, state=None, dep=None, image=None, cmd=None,
+                etp=None, cron=None, rsrt=None, rec=None, mxf=None, idl=None,
+                daf=None, env=None, dvl=None, prt=None, desc=None):
+      
+        # Redirect HTTP to HTTPS
+        if cherrypy.request.scheme == "http":
+            redirect_url = cherrypy.request.base
+            redirect_url = redirect_url.replace(":" + str(cherrypy.request.local.port), "")
+            redirect_url = redirect_url.replace("http:", "https:")
+            raise cherrypy.HTTPRedirect(redirect_url)
+          
+        # if the session isn't authorized send the user to the login
+        if not cherrypy.session.get("authorized", None):
+            cherrypy.session["redirect"] = cherrypy.request.wsgi_environ['REQUEST_URI']
+            raise cherrypy.HTTPRedirect("/")
+        
+        if id:
+            return API.update_task(id=id, name=name, state=state, dep=dep, image=image, cmd=cmd, etp=etp,
+                                  cron=cron, rsrt=rsrt, rec=rec, mxf=mxf, idl=idl, daf=daf,
+                                  env=env, dvl=dvl, prt=prt, desc=desc)
+        else:
+            return API.add_task(name=name, state=state, dep=dep, image=image, cmd=cmd, etp=etp,
+                                cron=cron, rsrt=rsrt, rec=rec, mxf=mxf, idl=idl, daf=daf,
+                                env=env, dvl=dvl, prt=prt, desc=desc)
+
+    @cherrypy.expose
+    def get_task(self, id=None):
+        # Redirect HTTP to HTTPS
+        if cherrypy.request.scheme == "http":
+            redirect_url = cherrypy.request.base
+            redirect_url = redirect_url.replace(":" + str(cherrypy.request.local.port), "")
+            redirect_url = redirect_url.replace("http:", "https:")
+            raise cherrypy.HTTPRedirect(redirect_url)
+          
+        # if the session isn't authorized send the user to the login
+        if not cherrypy.session.get("authorized", None):
+            cherrypy.session["redirect"] = cherrypy.request.wsgi_environ['REQUEST_URI']
+            raise cherrypy.HTTPRedirect("/")
+        
+        return API.get_task(id)
+      
+    @cherrypy.expose
+    def get_tasks(self):
+        # Redirect HTTP to HTTPS
+        if cherrypy.request.scheme == "http":
+            redirect_url = cherrypy.request.base
+            redirect_url = redirect_url.replace(":" + str(cherrypy.request.local.port), "")
+            redirect_url = redirect_url.replace("http:", "https:")
+            raise cherrypy.HTTPRedirect(redirect_url)
+          
+        # if the session isn't authorized send the user to the login
+        if not cherrypy.session.get("authorized", None):
+            cherrypy.session["redirect"] = cherrypy.request.wsgi_environ['REQUEST_URI']
+            raise cherrypy.HTTPRedirect("/")
+        
+        return API.get_tasks()
+
+    @cherrypy.expose
+    def get_users(self, username=None, userid=None, usertype=None):
+        # Redirect HTTP to HTTPS
+        if cherrypy.request.scheme == "http":
+            redirect_url = cherrypy.request.base
+            redirect_url = redirect_url.replace(":" + str(cherrypy.request.local.port), "")
+            redirect_url = redirect_url.replace("http:", "https:")
+            raise cherrypy.HTTPRedirect(redirect_url)
+          
+        # if the session isn't authorized send the user to the login
+        if not cherrypy.session.get("authorized", None):
+            cherrypy.session["redirect"] = cherrypy.request.wsgi_environ['REQUEST_URI']
+            raise cherrypy.HTTPRedirect("/")
+          
+        if cherrypy.session.get("usertype", "user") == "admin":
+            users = API.get_users(username, userid, usertype)
+            if users:
+                return [user.json for user in users]
+            else:
+                return json.dumps({"error": "No user matches the request"})
+        else:
+            return json.dumps({"error": "User not authorized for this request"})
+
+    @cherrypy.expose
+    def disable_task(self, id):
+        # Redirect HTTP to HTTPS
+        if cherrypy.request.scheme == "http":
+            redirect_url = cherrypy.request.base
+            redirect_url = redirect_url.replace(":" + str(cherrypy.request.local.port), "")
+            redirect_url = redirect_url.replace("http:", "https:")
+            raise cherrypy.HTTPRedirect(redirect_url)
+          
+        # if the session isn't authorized send the user to the login
+        if not cherrypy.session.get("authorized", None):
+            cherrypy.session["redirect"] = cherrypy.request.wsgi_environ['REQUEST_URI']
+            raise cherrypy.HTTPRedirect("/")
+        
+        return API.disable_task(id)
+      
+    @cherrypy.expose
+    def stop_task(self, id):
+        # Redirect HTTP to HTTPS
+        if cherrypy.request.scheme == "http":
+            redirect_url = cherrypy.request.base
+            redirect_url = redirect_url.replace(":" + str(cherrypy.request.local.port), "")
+            redirect_url = redirect_url.replace("http:", "https:")
+            raise cherrypy.HTTPRedirect(redirect_url)
+          
+        # if the session isn't authorized send the user to the login
+        if not cherrypy.session.get("authorized", None):
+            cherrypy.session["redirect"] = cherrypy.request.wsgi_environ['REQUEST_URI']
+            raise cherrypy.HTTPRedirect("/")
+        
+        return API.stop_task(id)
+      
+    @cherrypy.expose
+    def queue_task(self, id):
+        # Redirect HTTP to HTTPS
+        if cherrypy.request.scheme == "http":
+            redirect_url = cherrypy.request.base
+            redirect_url = redirect_url.replace(":" + str(cherrypy.request.local.port), "")
+            redirect_url = redirect_url.replace("http:", "https:")
+            raise cherrypy.HTTPRedirect(redirect_url)
+          
+        # if the session isn't authorized send the user to the login
+        if not cherrypy.session.get("authorized", None):
+            cherrypy.session["redirect"] = cherrypy.request.wsgi_environ['REQUEST_URI']
+            raise cherrypy.HTTPRedirect("/")
+        
+        return API.queue_task(id)
+      
 def secureheaders():
     headers = cherrypy.response.headers
     headers['X-Frame-Options'] = 'DENY'
@@ -198,8 +367,8 @@ def start_web_interface(pg):
     Arguments:
         pg: The postgres class instance used in the main program
     """
-    global postgres
-    postgres = pg
+    global API
+    API = API(pg)
     
     # Define the static path for template rendering
     # Enable this if Nginx proxy is not being used
@@ -213,6 +382,7 @@ def start_web_interface(pg):
     cherrypy.config.update({
                             'environment': 'production',
                             'tools.sessions.on': True,
+                            'engine.autoreload.on': False,
                             'tools.sessions.timeout': 45,
                             'tools.sessions.secure': True,
                             'tools.sessions.httponly': True,

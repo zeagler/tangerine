@@ -188,7 +188,7 @@ class Rancher(object):
             task: The task object to execute
         """
         
-        task_name = task.name.translate(None, '~`!@#$%^&*()_+{}|[]\\:";\'<>?,./=')
+        task_name = task.name.translate(None, '~`!@#$%^&*()_+{}|[]\\:";\'<>?,./= ')
         env_variables = dict(task.environment)
         if "docker:" in task.imageuuid:
             image = task.imageuuid
@@ -199,10 +199,10 @@ class Rancher(object):
           environmentId=self.environment.id,
           name="Task-" + task_name,
           launchConfig={
-            "command": task.command,
+            "command": task.command.split(" "),
             "dataVolumes": task.datavolumes,
             "environment": env_variables,
-            "entrypoint": task.entrypoint,
+            "entrypoint": task.entrypoint.split(" "),
             "name": task_name,
             "labels": {
               "io.rancher.container.start_once": "true"

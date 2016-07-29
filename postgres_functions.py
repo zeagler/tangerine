@@ -1,9 +1,9 @@
 """
 This module has functions to connect to a postgreSQL database
 """
-from psycopg2 import connect
-from settings import Postgresql as options
 from task import Task
+from user import User
+from postgres_connection import PGconnection
 
 class Postgres():
     """
@@ -14,20 +14,12 @@ class Postgres():
       if it is not set as an enviroment variable.
     """
     def __init__(self):
-        setattr(self, "host", options['PGHOST'])
-        setattr(self, "user", options['PGUSER'])
-        setattr(self, "pswd", options['PGPASS'])
-        setattr(self, "port", options['PGPORT'])
-        setattr(self, "dbname", options['PGDATABASE'])
-        setattr(self, "table", options['TASK_TABLE'])
-
-        conn_str = "host="+self.host+" dbname="+self.dbname+" user="+self.user+" port="+str(self.port)
-        if self.pswd: conn_str += " password="+self.pswd
-        setattr(self, "conn", connect(conn_str))
+        postgres = PGconnection()
+        setattr(self, "conn", postgres.conn)
 
         # Check if task table exists, create it if it does not
         cur = self.conn.cursor()
-        cur.execute("select exists(select * from information_schema.tables where table_name='"+self.table+"')")
+        cur.execute("select exists(select * from information_schema.tables where table_name='tangerine')")
         if not cur.fetchone()[0]:
             self.create_task_table()
 
@@ -39,47 +31,32 @@ class Postgres():
 
         # Get the column names
         cur = self.conn.cursor()
-        cur.execute("select column_name from information_schema.columns where table_name='"+self.table+"';")
-        setattr(self, "columns", cur.fetchall())
-        print("Connected to postgreSQL database")
-
-    def close_connection(self):
-        """Close the postgreSQL database connection"""
-        print('\n\nclosing postgres connection')
-        self.conn.close()
         
-    def create_task_table(self):
-        """Create the table to track tasks"""
-        cur = self.conn.cursor()
-        cur.execute("""
-        CREATE TABLE """+self.table+""" (
-            name                     varchar(100)  PRIMARY KEY,
-            state                    varchar(10)   NOT NULL DEFAULT 'queued',
-            dependencies             varchar[]     NOT NULL DEFAULT '{}',
-            command                  varchar[]     NOT NULL DEFAULT '{}',
-            recoverable_exitcodes    integer[]     NOT NULL DEFAULT '{}',
-            restartable              boolean       NOT NULL DEFAULT true,
-            entrypoint               varchar[]     NOT NULL DEFAULT '{}',
-            datavolumes              varchar[]     NOT NULL DEFAULT '{}',
-            environment              varchar[][2]  NOT NULL DEFAULT '{}',
-            imageuuid                varchar       NOT NULL,
-            cron                     varchar(100)  NOT NULL DEFAULT '',
-            next_run_time            integer,
-            last_run_time            integer,
-            last_success_time        integer,
-            last_fail_time           integer,
-            failures                 integer       NOT NULL DEFAULT 0,
-            max_failures             integer       NOT NULL DEFAULT 3,
-            service_id               varchar(10)   NOT NULL DEFAULT '',
-            count                    integer       NOT NULL DEFAULT 0,
-            delay                    integer       NOT NULL DEFAULT 0,
-            reschedule_delay         integer       NOT NULL DEFAULT 5
-        );""")
-        self.conn.commit()
+        cur.execute("select column_name from information_schema.columns where table_name='tangerine';")
+        setattr(self, "columns", cur.fetchall())
+        
+        cur.execute("select column_name from information_schema.columns where table_name='authorized_users';")
+        setattr(self, "user_columns", cur.fetchall())
             
     #
     # Begin task queries
     #
+    def get_task(self, id=None, name=None):
+        """Get the information of a task"""
+        query = "SELECT * FROM tangerine WHERE "
+        if id: query += "id='"+str(id)+"';"
+        elif name: query += "name='"+name+"';"
+        else: return None
+        
+        cur = self.conn.cursor()
+        cur.execute(query)
+        task = cur.fetchone()
+        
+        if task:
+            return Task(self.columns, task);
+        else:
+            return None
+      
     def get_tasks(self, column=None, value=None):
         """
         Get all tasks whose column matches input value
@@ -93,77 +70,167 @@ class Postgres():
         """
         cur = self.conn.cursor()
         if column == None:
-            cur.execute("SELECT * FROM "+self.table+";")
+            cur.execute("SELECT * FROM tangerine;")
         elif value == None:
-            cur.execute("SELECT * FROM "+self.table+" WHERE "+column+"='NULL';")
+            cur.execute("SELECT * FROM tangerine WHERE "+column+"='NULL';")
         else:
-            cur.execute("SELECT * FROM "+self.table+" WHERE "+column+"='"+value+"';")
+            cur.execute("SELECT * FROM tangerine WHERE "+column+"='"+value+"';")
         
-        ret_val = []
-        for task in cur.fetchall():
-            ret_val.append(Task(task, self))
-        return ret_val
+        return [Task(self.columns, task) for task in cur.fetchall()]
     
-    def update_task(self, name, column, value):
-        """Update a single task"""
-        # TODO: ensure a lock is placed on the table
-        
-        # Stopping a task has extra steps
-        if column == "state" and value == "stopped":
-            self.stop_task(name)
-            return True
-        elif column == "state" and value == "queued":
-            self.queue_task(name)
-            return True
-        else:
-            cur = self.conn.cursor()
-            
-            if value == None:
-                cur.execute("UPDATE "+self.table+" SET "+column+"=NULL WHERE name='"+name+"';")
-            else:
-                cur.execute("UPDATE "+self.table+" SET "+column+"='"+value+"' WHERE name='"+name+"';")
-                
-            self.conn.commit()
-
-            cur = self.conn.cursor()
-            
-            # check that the row was updated
-            cur.execute("SELECT "+column+" FROM "+self.table+" WHERE name='"+name+"';")
-            if cur.fetchone()[0] == value:
-                return True
-            else:
-                return False
-
-    def add_task(self, name, state, dep, image, command, entrypoint, cron,
+    def add_task(self, name, state, dependencies, image, command, entrypoint, cron,
                  restartable, exitcodes, max_failures, delay, faildelay,
-                 environment, datavolumes):
+                 environment, datavolumes, port, description):
         """Insert a task into the table"""
+        # TODO: try/catch rollback on commit
+        # TODO: check input for validity
+        if not name:
+            return {"error": "Name can not be blank"}
+        elif self.get_task(name=name):
+                return {"error": "Name conflicts with existing task"}
+
+        if not (state == "queued" or state == "waiting" or state == "stopped"):
+            return {"error": "Requested state is not valid"}
+
+        if not image:
+            return {"error": "Image can not be blank"}
+        elif " " in image:
+            return {"error": "Image can not contain a space"}
+          
+        # TODO: Check dependencies, give a warning if one doesn't exist
+
+        # Parse enviroment, datavolumes, ports, and dependencies     
+        if environment:
+            if type(environment) is list:
+                env = ['{"' + e.split("=")[0] + '","' + e.split("=")[1] + '"}' for e in environment]
+                env = ", ".join(env);
+            else:
+                env = '{"' + environment.split("=")[0] + '","' + environment.split("=")[1] + '"}'
+        else:
+            env = ""
         
-        env = ["{" + e.split("=")[0] + "," + e.split("=")[1] + "}" for e in environment.split(",")]
+        if datavolumes:
+            if type(datavolumes) is list:
+                dvl = ", ".join(datavolumes)
+            else:
+                dvl = datavolumes
+        else:
+            dvl = ""
         
+        if dependencies:
+            if type(dependencies) is list:
+                dep = ", ".join(dependencies)
+            else:
+                dep = dependencies
+        else:
+            dep = ""
+            
+        if restartable == "on" or restartable == "true":
+            rstr = "true"
+        else:
+            rstr = "false"
+            
         cur = self.conn.cursor()
-        cur.execute("INSERT INTO "+self.table+"(name, state, dependencies, imageuuid, command, entrypoint, " + \
-                                               "cron, restartable, recoverable_exitcodes, max_failures, delay, " + \
-                                               "reschedule_delay, environment, datavolumes) " + \
-                    "VALUES ('"+name+"','"+state+"','{"+dep+"}','"+image+"','{"+command.replace(" ", ",")+"}','{"+entrypoint.replace(" ", ",")+"}'," + \
-                    "'"+cron+"',"+restartable+",'{"+exitcodes+"}','"+max_failures+"','"+delay+"','"+faildelay+"','{"+",".join(env)+"}','{"+datavolumes+"}');")
-    
+        cur.execute("INSERT INTO tangerine (id, name, description, state, dependencies, imageuuid, command, entrypoint, " + \
+                                     "cron, restartable, recoverable_exitcodes, max_failures, delay, " + \
+                                     "reschedule_delay, environment, datavolumes) " + \
+                    "VALUES (DEFAULT, '"+name+"','"+description.replace("'","''")+"','"+state+"','{"+dep+"}','"+image+"','"+command+"','"+entrypoint+"'," + \
+                    "'"+cron+"',"+rstr+",'{"+exitcodes+"}','"+max_failures+"','"+delay+"','"+faildelay+"','{"+env+"}','{"+dvl+"}');")
         self.conn.commit()
         
         # check that the row was entered
-        cur.execute("SELECT name FROM "+self.table+" WHERE name='"+name+"';")
-        if cur.fetchone()[0] == name:
-            return True
-        else:
-            return False
+        task = self.get_task(name=name)
         
+        if task:
+            task.initialize()
+            return task.__dict__
+        else:
+            return {"error": "Could not add task"}
+
+    def update_task(self, id, name, state, dependencies, image, command, entrypoint, cron,
+                    restartable, exitcodes, max_failures, delay, faildelay,
+                    environment, datavolumes, port, description):
+        """Insert a task into the table"""
+        # TODO: try/catch rollback on commit
+        # TODO: check input for validity
+        if not id:
+            return {"error": "Task ID must be provided when updating a task"}
+      
+        task = self.get_task(id)
+        
+        if not name:
+            return {"error": "Name can not be blank"}
+        elif not name == task.name:
+            if self.get_task(name=name):
+                return {"error": "Name conflicts with another task"}
+
+        if not image:
+            return {"error": "Image can not be blank"}
+        elif " " in image:
+            return {"error": "Image can not contain a space"}
+          
+        # TODO: Check dependencies, give a warning if one doesn't exist
+
+        # Parse enviroment, datavolumes, ports, and dependencies     
+        if environment:
+            if type(environment) is list:
+                env = ['{"' + e.split("=")[0] + '","' + e.split("=")[1] + '"}' for e in environment]
+                env = ", ".join(env);
+            else:
+                env = '{"' + environment.split("=")[0] + '","' + environment.split("=")[1] + '"}'
+        else:
+            env = ""
+        
+        if datavolumes:
+            if type(datavolumes) is list:
+                dvl = ", ".join(datavolumes)
+            else:
+                dvl = datavolumes
+        else:
+            dvl = ""
+        
+        if dependencies:
+            if type(dependencies) is list:
+                dep = ", ".join(dependencies)
+            else:
+                dep = dependencies
+        else:
+            dep = ""
+            
+        if restartable == "on" or restartable == "true":
+            rstr = "true"
+        else:
+            rstr = "false"
+            
+        cur = self.conn.cursor()
+        cur.execute("UPDATE tangerine SET " + \
+                      "name='" + name + \
+                    "', description='" + description.replace("'","''") + \
+                    "', dependencies='{" + dep + \
+                    "}', imageuuid='" + image + \
+                    "', command='" + command + \
+                    "', entrypoint='" + entrypoint + \
+                    "', cron='" + cron + \
+                    "', restartable=" + rstr + \
+                    ", recoverable_exitcodes='{" + exitcodes + \
+                    "}', max_failures='" + max_failures + \
+                    "', delay='" + delay + \
+                    "', reschedule_delay='" + faildelay + \
+                    "', environment='{" + env + \
+                    "}', datavolumes='{" + dvl + \
+                    "}' WHERE id="+str(id)+";")
+        self.conn.commit()
+
+        task.initialize()
+        return task.__dict__
+
     def queue_task(self, name):
         """Stop a task"""
         # TODO: ensure a lock is placed on the database table
         
         cur = self.conn.cursor()
-        cur.execute("SELECT * FROM "+self.table+" WHERE name='"+name+"';")
-        task = Task(cur.fetchone(), self)
+        cur.execute("SELECT * FROM tangerine WHERE name='"+name+"';")
+        task = Task(self.columns, cur.fetchone())
         task.queue("misfire")
         
     def stop_task(self, name):
@@ -171,31 +238,74 @@ class Postgres():
         # TODO: ensure a lock is placed on the database table
         
         cur = self.conn.cursor()
-        cur.execute("SELECT * FROM "+self.table+" WHERE name='"+name+"';")
-        task = Task(cur.fetchone(), self)
+        cur.execute("SELECT * FROM tangerine WHERE name='"+name+"';")
+        task = Task(self.columns, cur.fetchone())
         task.stop()
-    
-    def delete_task(self, name):
-        """Delete a task definition"""
-        # TODO: ensure a lock is placed on the database table
-        # TODO: you can only delete a stopped task
-        
-        cur = self.conn.cursor()
-        cur.execute("DELETE FROM "+self.table+" WHERE name='"+name+"';")
-        self.conn.commit()
-        
-        # check that the row was deleted
-        cur.execute("SELECT name FROM "+self.table+" WHERE name='"+name+"';")
-        if cur.fetchone()[0] == None:
-            return True
-        else:
-            return False
-        
+
     #
     # Begin tangerine administration queries
     #
+    def get_users(self, column=None, value=None):
+        """
+        Get information on users
+        
+        Args: 
+            column: The column that will be searched
+            value: The required value of the column
+        
+        Returns:
+            A list of User objects, one for each row that satisfies column=value
+        """
+        cur = self.conn.cursor()
+        query = "SELECT * FROM authorized_users"
+        if column:
+            query += " WHERE " + column + "='" + (value if value else "NULL") + "'"
+        
+        cur.execute(query+";")
+        return [User(self.user_columns, user) for user in cur.fetchall()]
+
+    #
+    # Create tables
+    # TODO: functions to modify table columns when needed
+    #
+    def create_task_table(self):
+        """Create the table to track tasks"""
+        # TODO: try/catch rollback on commit
+        cur = self.conn.cursor()
+        cur.execute("""
+        CREATE TABLE tangerine (
+            id                       serial        PRIMARY KEY,
+            name                     varchar(100)  NOT NULL UNIQUE,
+            description              varchar,
+            state                    varchar(10)   NOT NULL DEFAULT 'queued',
+            dependencies             varchar[]     NOT NULL DEFAULT '{}',
+            command                  varchar       NOT NULL DEFAULT '',
+            recoverable_exitcodes    integer[]     NOT NULL DEFAULT '{}',
+            restartable              boolean       NOT NULL DEFAULT true,
+            entrypoint               varchar       NOT NULL DEFAULT '',
+            datavolumes              varchar[]     NOT NULL DEFAULT '{}',
+            environment              varchar[][2]  NOT NULL DEFAULT '{}',
+            imageuuid                varchar       NOT NULL,
+            cron                     varchar(100)  NOT NULL DEFAULT '',
+            next_run_time            integer,
+            last_run_time            integer,
+            last_success_time        integer,
+            last_fail_time           integer,
+            creation_time            integer,
+            last_modified_time       integer,
+            failures                 integer       NOT NULL DEFAULT 0,
+            max_failures             integer       NOT NULL DEFAULT 3,
+            service_id               varchar(10)   NOT NULL DEFAULT '',
+            count                    integer       NOT NULL DEFAULT 0,
+            delay                    integer       NOT NULL DEFAULT 0,
+            reschedule_delay         integer       NOT NULL DEFAULT 5,
+            disabled_time            integer
+        );""")
+        self.conn.commit()
+    
     def create_user_table(self):
         """Create the table to store authorized users"""
+        # TODO: try/catch rollback on commit
         cur = self.conn.cursor()
         cur.execute("""
         CREATE TABLE authorized_users (
@@ -205,9 +315,19 @@ class Postgres():
         );""")
         self.conn.commit()
 
-    def get_user(self, userid):
-        """Get the informaton about the user"""
-        cur = self.conn.cursor()
-        cur.execute("SELECT * FROM authorized_users WHERE userid='" + str(userid) + "';")
-        return cur.fetchone()
+    def create_task_history_table(self):
+        #TODO
+        print "WIP"
+    
+    def create_options_table(self):
+        #TODO
+        print "WIP"
+
+    def create_host_table(self):
+        #TODO
+        print "WIP"
+    
+    def create_notifications_table(self):
+        #TODO
+        print "WIP"
         

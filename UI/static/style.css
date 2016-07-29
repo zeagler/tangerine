@@ -1,162 +1,167 @@
 body {
-    background-image: url("stardust.png");
+    height: 100%;
     overflow: hidden;
 }
 
-ul.topnav {
-    position: fixed;
-    display: block;
-    top: 0; left: 0;
-    right: 0; bottom: 0;
-    width: 100%; height: 80px;
-    list-style-type: none;
-    margin: 0;
-    padding: 0;
-    overflow: hidden;
-    background-color: #4CAF50;
-}
-
-ul.topnav li {
-    float: left;
-}
-
-ul.topnav li a {
-        background:-webkit-gradient(linear, left top, left bottom, color-stop(0.05, #4caf4f), color-stop(1, #228b22));
-        background:-moz-linear-gradient(top, #4caf4f 5%, #228b22 100%);
-        background:-webkit-linear-gradient(top, #4caf4f 5%, #228b22 100%);
-        background:-o-linear-gradient(top, #4caf4f 5%, #228b22 100%);
-        background:-ms-linear-gradient(top, #4caf4f 5%, #228b22 100%);
-        background:linear-gradient(to bottom, #4caf4f 5%, #228b22 100%);
-        filter:progid:DXImageTransform.Microsoft.gradient(startColorstr='#4caf4f', endColorstr='#228b22',GradientType=0);
-        background-color:#4caf4f;
-        -moz-border-radius:28px;
-        -webkit-border-radius:28px;
-        border-radius:28px;
-        border:1px solid #333333;
-        display:inline-block;
-        cursor:pointer;
-        color:#ffffff;
-        font-family:Times New Roman;
-        font-size:17px;
-        font-weight:bold;
-        padding:8px 20px;
-        text-decoration:none;
-        text-shadow:0px 1px 0px #2f6627;
-}
-ul.topnav li a:hover {
-        background:-webkit-gradient(linear, left top, left bottom, color-stop(0.05, #228b22), color-stop(1, #4caf4f));
-        background:-moz-linear-gradient(top, #228b22 5%, #4caf4f 100%);
-        background:-webkit-linear-gradient(top, #228b22 5%, #4caf4f 100%);
-        background:-o-linear-gradient(top, #228b22 5%, #4caf4f 100%);
-        background:-ms-linear-gradient(top, #228b22 5%, #4caf4f 100%);
-        background:linear-gradient(to bottom, #228b22 5%, #4caf4f 100%);
-        filter:progid:DXImageTransform.Microsoft.gradient(startColorstr='#228b22', endColorstr='#4caf4f',GradientType=0);
-        background-color:#228b22;
-}
-ul.topnav li a:active {
-        position:relative;
-        top:1px;
-}
-
-
-ul.topnav li span {
-    position: relative;
-    top: 20px;
-    color: Gold;
-    font: bold;
-    font-size:35px;
+#navbar {
     cursor: default;
-    outline: none;
 }
 
-ul.topnav li button {
-    background:none;
-    height: 80px;
-    display: block;
-    color: white;
-    text-align: center;
-    padding: 30px 16px;
-    text-decoration: none;
-    border: 0;
-    outline: none;
+#panel-divider {
+    margin: 5px;
 }
 
-ul.topnav li button:hover {background-color: forestgreen!important;}
-ul.topnav li.right {float: right;}
-
-#container {
+#task_panel .panel-body {
+    height: calc(100vh - 205px);
 }
 
-#container:after {
-    display:inline-block;
-    width:100%;
-    content:'';
+#add_task_table td {
+    padding-left: 5px
 }
 
-.header {
-    float: left;
-    height: 80px;
+.tooltip-inner {
+    max-width: 350px;
+    width: 350px; 
 }
 
-.content {
-    width:75%px;
-    text-align: center;
-    display: inline-block;
-    overflow-y: scroll;
-    position: absolute;
-    top: 85px;
-    left: 0px;
-    right: 0px;
-    bottom: 0;
+.btn-glyphicon {
+    padding: 4px;
+    background: #ffffff;
+    margin-right: 4px;
 }
 
-.task {
-    position: relative;
-    text-align: justify;
-    display: inline-block;
-    width: 300px;
-    height: 113px;
-    padding: 15px;
+.btn-add-glyphicon {
+    padding: 8px;
+    background: #ffffff;
 }
 
-p span { 
-    text-align: center;
-    position: absolute;
-    top: 58px;
-    width: 300px;
-    height: 113px;
-    color: black; 
-    font: bold 20px Helvetica;
-    letter-spacing: -1px;
+#tasks {
+    height: calc(100vh - 230px);
+    overflow-y: auto;
 }
 
-div.login span {
-    margin: 0px;
-    background: #E8E5CD;
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    margin-right: -50%;
-    transform: translate(-50%, -50%);
-    padding: 25px;
-    padding-top: 100px;
-    padding-bottom: 100px;
+#switch {
+    margin-top: 3px;
 }
 
-div.login a {
-   margin: 20px; 
-}
-
-div.login span.border {
-    top: 20px;
-    color: #ff9900;
-    font: bold;
-    font-size:35px;
-    cursor: default;
-    outline: none;
-    top: 0px;
-    padding: 0px;
+#tasks {
     width: 100%;
     text-align: center;
-    background-color: #52873D;
+}
+
+#tasks .task {
+    position: relative;
+    text-align: center;
+    height: 75px;
+    width: 200px;
+    margin: 5px;
+    margin-left: 25px;
+    margin-right: 25px;
+    border-radius: 20px;
+    white-space:normal !important;
+    max-width: 200px;
+}
+
+#tasks .Stopped, .Stopping {
+    background-color: #dddddd;
+    color: white;
+}
+
+#tasks .task p {
+    text-align: center;
+    font: bold 20px Helvetica;
+    padding-top: 10px;
+}
+
+#updateTaskModal .modal-body {
+    height: 60%;
+    overflow: auto;
+}
+
+#cloneTaskModal .modal-body {
+    height: 60%;
+    overflow: auto;
+}
+
+#displayTaskModal .modal-body {
+    height: 60%;
+    overflow: auto;
+}
+
+#disableTask {
+    margin-right: 8px;
+}
+
+#disableTask .dropdown-menu {
+    min-width: 0px;
+    width: auto!important;
+}
+
+#disableTask li {
+    padding: 0;
+    margin: 0;
+}
+
+#addTaskModal .modal-body {
+    height: 60%;
+    overflow: auto;
+}
+
+#loginModal {
+  text-align: center;
+}
+
+#loginModal .modal-dialog {
+    display: inline-block;
+    text-align: center;
+    vertical-align: middle;
+}
+
+#loginModal .modal-header {
+    padding: 0px;
+}
+
+#auth {
+    margin-top: 150px;
+    width: 200px;
+}
+
+.tt-query {
+  -webkit-box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.075);
+     -moz-box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.075);
+          box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.075);
+}
+
+.tt-hint {
+  color: #999
+}
+
+.tt-menu {    /* used to be tt-dropdown-menu in older versions */
+  width: 100%;
+  margin-top: 4px;
+  padding: 4px 0;
+  background-color: #fff;
+  border: 1px solid #ccc;
+  border: 1px solid rgba(0, 0, 0, 0.2);
+  -webkit-border-radius: 4px;
+     -moz-border-radius: 4px;
+          border-radius: 4px;
+  -webkit-box-shadow: 0 5px 10px rgba(0,0,0,.2);
+     -moz-box-shadow: 0 5px 10px rgba(0,0,0,.2);
+          box-shadow: 0 5px 10px rgba(0,0,0,.2);
+}
+
+.tt-suggestion {
+  padding: 3px 20px;
+  line-height: 24px;
+}
+
+.tt-suggestion.tt-cursor,.tt-suggestion:hover {
+  color: #fff;
+  background-color: #0097cf;
+
+}
+
+.tt-suggestion p {
+  margin: 0;
 }

@@ -15,7 +15,9 @@ from time import sleep
 import sys
 
 from amazon_functions import Amazon
+from UI.API import API
 from postgres_functions import Postgres
+from postgres_connection import close_connections
 from rancher_functions import Rancher
 from slack_functions import Slack
 from UI.web_interface import start_web_interface
@@ -177,6 +179,16 @@ def check_table():
         host.remove_labels("exitCode,badContainer,badHost")
         host.add_labels("status=idle")
         service.remove()
+    
+    for task in postgres.get_tasks("state", "disabling"):
+        service = rancher.get_service_by_id(task.service_id)
+        container = rancher.get_container_by_service(service.name)
+        host = rancher.get_host_by_id(container.hostId)
+        
+        task.disable()
+        host.remove_labels("exitCode,badContainer,badHost")
+        host.add_labels("status=idle")
+        service.remove()
 
     if (not postgres.get_tasks("state", "running")) and (not postgres.get_tasks("state", "ready")):
         if not postgres.get_tasks("state", "queued"):
@@ -279,7 +291,8 @@ def check_cron_tasks():
     Check all tasks to see if it's next run time has passed, if it has the task will be queued.
     This only checks tasks that have a cron configuration defined.
     """
-    for task in postgres.get_tasks("state", "success"):
+    tasks = postgres.get_tasks("state", "success") + postgres.get_tasks("state", "waiting")
+    for task in tasks:
         if task.check_next_run_time():
             print "Task '" + task.name + "' has been put in the queue on it's cron schedule"
             slack.send_message("Task '" + task.name + "' has been put in the queue on it's cron schedule")
@@ -293,8 +306,8 @@ def main():
     print "Spot Fleet Request: " + settings.Amazon['SPOT_FLEET_REQUEST_ID']
 
     global postgres, rancher, amazon, slack, scale_down_timeout
+    register(close_connections) # Close postgres connection at exit
     postgres = Postgres()
-    register(postgres.close_connection) # Close postgres connection at exit
     rancher = Rancher()
     amazon = Amazon()
     slack = Slack()
@@ -326,6 +339,7 @@ def main():
 if __name__ == '__main__':
     if len(sys.argv) > 1:
         if (sys.argv[1] == "load"):
+            # To load a CSV file of task definitions
             print "WIP"
             status = 0
         elif (sys.argv[1] == "web"):
