@@ -58,6 +58,7 @@ var add_more_handler = function(button) {
 
 $(document).ready(function(e) {
     // Add type ahead for the search box
+/*
     $('#find-task .typeahead').typeahead({
         hint: false,
         highlight: true,
@@ -67,6 +68,7 @@ $(document).ready(function(e) {
         name: 'tasks',
         source: findTasks()
     });
+*/
 });
 
 $(document).on('click', '#switch li', function (e) {
@@ -242,6 +244,8 @@ function cloneTask(id) {
 // Try to add or update a Task definition
 function addTask() {
     form = $("#add_task_form").serialize()
+      
+    form += "&rsrt=" + $('#rsrt')[0].checked
     
     $('.env').each(function(i, obj) {
         if ($(obj).find("input")[0].value !== "") {

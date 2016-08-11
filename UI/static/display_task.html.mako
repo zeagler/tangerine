@@ -37,8 +37,8 @@
                         <div class="tab-pane active" id="container">
                             <dl class="dl-horizontal">
                                 <dt>Image </dt><dd>${task.imageuuid}</dd></br>
-                                <dt>Command </dt><dd>${task.command}</dd></br>
-                                <dt>Entrypoint </dt><dd>${task.entrypoint}</dd></br>
+                                <dt>Command </dt><dd>${task.command_raw}</dd></br>
+                                <dt>Entrypoint </dt><dd>${task.entrypoint_raw}</dd></br>
                                 <dt>Working Dir </dt><dd></dd></br>
                                 <dt>User </dt><dd></dd></br>
                                 <dt>Console </dt><dd></dd>
@@ -49,7 +49,7 @@
                         <dl class="dl-horizontal">
                             <dt>Environment </dt>
                             <dd>
-                                % for env in task.environment:
+                                % for env in task.environment_raw:
                                     ${env[0]} = ${env[1]}</br>
                                 % endfor
                             </dd></br>

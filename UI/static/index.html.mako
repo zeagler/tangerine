@@ -3,12 +3,15 @@
         <title>Tangerine Status Page</title>
         
         <link rel="stylesheet" type="text/css" href="static/style.css">
-        <link rel="stylesheet/less" type="text/css" href="bootswatch.less" />
-        <link rel="stylesheet/less" type="text/css" href="variables.less" />
         <link rel="shortcut icon" type="image/x-icon" href="static/favicon.ico" />
 
-        <!-- Bootstrap -->
         <script src="https://code.jquery.com/jquery-3.0.0.min.js"></script>
+
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/patternfly/3.8.1/css/patternfly.min.css">
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/patternfly/3.8.1/css/patternfly-additions.min.css">
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/patternfly/3.8.1/js/patternfly.min.js"></script>
+
+        <!-- Bootstrap -->
         <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootswatch/3.3.6/cerulean/bootstrap.min.css">
         <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js" integrity="sha384-Tc5IQib027qvyjSMfHjOMaLkfuWVxZxUPnCJA7l2mCWNIpG9mGCD8wGNIcPD7Txa" crossorigin="anonymous"></script>
 
@@ -37,7 +40,7 @@
             <div class="container-fluid">
                 <ul class="nav navbar-nav">
                     <li class="active"><a>Overview</a></li>
-                    <li><a>History</a></li>
+                    <li><a href="/history">History</a></li>
                 </ul>
                 <ul class="nav navbar-nav navbar-right">
                     % if usertype == "admin":

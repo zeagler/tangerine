@@ -12,7 +12,7 @@
         <li class="active"><a href="#container" data-toggle="tab">Container</a></li>
         <li><a href="#env-pane" data-toggle="tab">Environment</a></li>
         <li><a href="#sch" data-toggle="tab">Scheduling</a></li>
-        <li><a href="#rsrt" data-toggle="tab">Restart</a></li>
+        <li><a href="#restart" data-toggle="tab">Restart</a></li>
     </ul>
     <div class="tab-content">
         <div class="tab-pane active" id="container">
@@ -122,9 +122,9 @@
                 <div class="col-sm-10"><input class="form-control" name="cron"></div>
             </div>
         </div>
-        <div class="tab-pane" id="rsrt">
+        <div class="tab-pane" id="restart">
             <div class="form-group">
-                <input type="checkbox" class="checkbox-inline" id="rsrt" name="rsrt" checked="true"">
+                <input type="checkbox" class="checkbox-inline" id="rsrt" checked="true">
                 <label class="control-label">Restartable</label>
             </div>
             <div class="form-group">

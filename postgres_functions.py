@@ -2,6 +2,7 @@
 This module has functions to connect to a postgreSQL database
 """
 from task import Task
+from run import Run
 from user import User
 from postgres_connection import PGconnection
 
@@ -24,20 +25,44 @@ class Postgres():
             self.create_task_table()
 
         # Check if the authorized user table exists, create it if it does not
-        cur = self.conn.cursor()
         cur.execute("select exists(select * from information_schema.tables where table_name='authorized_users')")
         if not cur.fetchone()[0]:
             self.create_user_table()
 
-        # Get the column names
-        cur = self.conn.cursor()
-        
+        # Check if the shared task queue exists, create it if it does not
+        cur.execute("select exists(select * from information_schema.tables where table_name='task_queue')")
+        if not cur.fetchone()[0]:
+            self.create_task_queue()
+
+        # Check if the task history table exists, create it if it does not
+        cur.execute("select exists(select * from information_schema.tables where table_name='task_history')")
+        if not cur.fetchone()[0]:
+            self.create_task_history_table()
+
+        # Get the column names        
         cur.execute("select column_name from information_schema.columns where table_name='tangerine';")
         setattr(self, "columns", cur.fetchall())
         
         cur.execute("select column_name from information_schema.columns where table_name='authorized_users';")
         setattr(self, "user_columns", cur.fetchall())
-            
+        
+        cur.execute("select column_name from information_schema.columns where table_name='task_history';")
+        setattr(self, "task_history_columns", cur.fetchall())
+        
+        self.conn.commit()
+    
+    def execute(self, query):
+        """Try to execute a query, rollback on error"""
+        cur = self.conn.cursor()
+        try:
+            cur.execute(query)
+            self.conn.commit()
+        except:
+            self.conn.rollback()
+            return False
+        
+        return True
+    
     #
     # Begin task queries
     #
@@ -50,6 +75,7 @@ class Postgres():
         
         cur = self.conn.cursor()
         cur.execute(query)
+        self.conn.commit()
         task = cur.fetchone()
         
         if task:
@@ -76,18 +102,18 @@ class Postgres():
         else:
             cur.execute("SELECT * FROM tangerine WHERE "+column+"='"+value+"';")
         
+        self.conn.commit()
         return [Task(self.columns, task) for task in cur.fetchall()]
-    
+
     def add_task(self, name, state, dependencies, image, command, entrypoint, cron,
                  restartable, exitcodes, max_failures, delay, faildelay,
                  environment, datavolumes, port, description):
         """Insert a task into the table"""
-        # TODO: try/catch rollback on commit
         # TODO: check input for validity
         if not name:
             return {"error": "Name can not be blank"}
         elif self.get_task(name=name):
-                return {"error": "Name conflicts with existing task"}
+            return {"error": "Name conflicts with existing task"}
 
         if not (state == "queued" or state == "waiting" or state == "stopped"):
             return {"error": "Requested state is not valid"}
@@ -124,34 +150,27 @@ class Postgres():
                 dep = dependencies
         else:
             dep = ""
-            
-        if restartable == "on" or restartable == "true":
-            rstr = "true"
-        else:
-            rstr = "false"
-            
-        cur = self.conn.cursor()
-        cur.execute("INSERT INTO tangerine (id, name, description, state, dependencies, imageuuid, command, entrypoint, " + \
-                                     "cron, restartable, recoverable_exitcodes, max_failures, delay, " + \
-                                     "reschedule_delay, environment, datavolumes) " + \
-                    "VALUES (DEFAULT, '"+name+"','"+description.replace("'","''")+"','"+state+"','{"+dep+"}','"+image+"','"+command+"','"+entrypoint+"'," + \
-                    "'"+cron+"',"+rstr+",'{"+exitcodes+"}','"+max_failures+"','"+delay+"','"+faildelay+"','{"+env+"}','{"+dvl+"}');")
-        self.conn.commit()
+
+        query = "INSERT INTO tangerine (id, name, description, state, dependencies, imageuuid, command, entrypoint, " + \
+                                       "cron, restartable, recoverable_exitcodes, max_failures, delay, " + \
+                                       "reschedule_delay, environment, datavolumes) " + \
+                "VALUES (DEFAULT, '"+name+"','"+description.replace("'","''")+"','"+state+"','{"+dep+"}','"+image+"','"+command+"','"+entrypoint+"'," + \
+                "'"+cron+"',"+restartable+",'{"+exitcodes+"}','"+max_failures+"','"+delay+"','"+faildelay+"','{"+env+"}','{"+dvl+"}');"
         
-        # check that the row was entered
-        task = self.get_task(name=name)
-        
-        if task:
-            task.initialize()
-            return task.__dict__
-        else:
-            return {"error": "Could not add task"}
+        if self.execute(query):            
+            # check that the row was entered
+            task = self.get_task(name=name)
+            
+            if task:
+                task.initialize()
+                return task.__dict__
+
+        return {"error": "Could not add task"}
 
     def update_task(self, id, name, state, dependencies, image, command, entrypoint, cron,
                     restartable, exitcodes, max_failures, delay, faildelay,
                     environment, datavolumes, port, description):
         """Insert a task into the table"""
-        # TODO: try/catch rollback on commit
         # TODO: check input for validity
         if not id:
             return {"error": "Task ID must be provided when updating a task"}
@@ -197,50 +216,130 @@ class Postgres():
         else:
             dep = ""
             
-        if restartable == "on" or restartable == "true":
-            rstr = "true"
-        else:
-            rstr = "false"
-            
-        cur = self.conn.cursor()
-        cur.execute("UPDATE tangerine SET " + \
-                      "name='" + name + \
-                    "', description='" + description.replace("'","''") + \
-                    "', dependencies='{" + dep + \
-                    "}', imageuuid='" + image + \
-                    "', command='" + command + \
-                    "', entrypoint='" + entrypoint + \
-                    "', cron='" + cron + \
-                    "', restartable=" + rstr + \
-                    ", recoverable_exitcodes='{" + exitcodes + \
-                    "}', max_failures='" + max_failures + \
-                    "', delay='" + delay + \
-                    "', reschedule_delay='" + faildelay + \
-                    "', environment='{" + env + \
-                    "}', datavolumes='{" + dvl + \
-                    "}' WHERE id="+str(id)+";")
-        self.conn.commit()
+        query = "UPDATE tangerine SET " + \
+                "name='" + name + \
+                "', description='" + description.replace("'","''") + \
+                "', dependencies='{" + dep + \
+                "}', imageuuid='" + image + \
+                "', command='" + command + \
+                "', entrypoint='" + entrypoint + \
+                "', cron='" + cron + \
+                "', restartable=" + restartable + \
+                ", recoverable_exitcodes='{" + exitcodes + \
+                "}', max_failures='" + max_failures + \
+                "', delay='" + delay + \
+                "', reschedule_delay='" + faildelay + \
+                "', environment='{" + env + \
+                "}', datavolumes='{" + dvl + \
+                "}' WHERE id="+str(id)+";"
 
-        task.initialize()
-        return task.__dict__
+        if self.execute(query):            
+            # check that the row was entered
+            task = self.get_task(name=name)
+            task.initialize()
+            return task.__dict__
+
+        return {"error": "Could not update task"}
 
     def queue_task(self, name):
-        """Stop a task"""
-        # TODO: ensure a lock is placed on the database table
+        """Queue a task"""
         
         cur = self.conn.cursor()
         cur.execute("SELECT * FROM tangerine WHERE name='"+name+"';")
+        self.conn.commit()
         task = Task(self.columns, cur.fetchone())
         task.queue("misfire")
         
     def stop_task(self, name):
         """Stop a task"""
-        # TODO: ensure a lock is placed on the database table
         
         cur = self.conn.cursor()
         cur.execute("SELECT * FROM tangerine WHERE name='"+name+"';")
+        self.conn.commit()
         task = Task(self.columns, cur.fetchone())
         task.stop()
+    
+    def load_queue(self):
+        """Load the task queue with the id of all the tasks in the task table"""
+        cur = self.conn.cursor()
+        cur.execute("LOCK TABLE task_queue IN ACCESS EXCLUSIVE MODE;")
+        
+        cur.execute("SELECT COUNT(id) FROM task_queue;")
+
+        # if the task queue still has tasks return nothing
+        if cur.fetchone()[0]:
+            self.conn.rollback()
+        else:
+            cur.execute("SELECT COUNT(id) FROM tangerine;")
+
+            # If the task table is empty return nothing
+            if not cur.fetchone()[0]:
+                self.conn.commit()
+                return
+            
+            cur.execute("SELECT id FROM tangerine;")
+            ids = ("(" + str(id[0]) + ")" for id in cur.fetchall())
+            cur.execute("INSERT INTO task_queue VALUES " + ", ".join(ids) + ";")
+            self.conn.commit()
+        
+    def pop_queue(self):
+        """Pop the first task id from the processing queue"""
+        cur = self.conn.cursor()
+        cur.execute("LOCK TABLE task_queue IN ACCESS EXCLUSIVE MODE;")
+
+        cur.execute("SELECT id FROM task_queue LIMIT 1;")
+        row = cur.fetchone()
+     
+        if row:
+            id = row[0]
+            cur.execute("DELETE FROM task_queue WHERE id='"+str(id)+"';")
+        else:
+            id = False
+
+        self.conn.commit()
+        
+        return id
+      
+    def get_run(self, id):
+        """Get the information of a run"""
+        if not id:
+            return None
+          
+        query = "SELECT * FROM task_history WHERE run_id='"+str(id)+"';"
+        
+        cur = self.conn.cursor()
+        cur.execute(query)
+        self.conn.commit()
+        run = cur.fetchone()
+        
+        if run:
+            return Run(self.task_history_columns, run);
+        else:
+            return None
+      
+    def get_runs(self):
+        """Get the information of a run"""
+        if not id:
+            return None
+          
+        query = "SELECT run_id, name, result_state, run_finish_time_str FROM task_history;"
+        
+        cur = self.conn.cursor()
+        cur.execute(query)
+        self.conn.commit()
+
+        col = [['run_id'], ['name'], ['result_state'], ['run_finish_time_str']]
+        runs = [Run(col, run) for run in cur.fetchall()]
+        
+        return runs
+    
+    def reserve_next_run_id(self):
+        """Get the next valid run id"""
+        query = "SELECT NEXTVAL(pg_get_serial_sequence('task_history', 'run_id'))"
+        cur = self.conn.cursor()
+        cur.execute(query)
+        self.conn.commit()
+        return cur.fetchone()[0]
 
     #
     # Begin tangerine administration queries
@@ -262,6 +361,7 @@ class Postgres():
             query += " WHERE " + column + "='" + (value if value else "NULL") + "'"
         
         cur.execute(query+";")
+        self.conn.commit()
         return [User(self.user_columns, user) for user in cur.fetchall()]
 
     #
@@ -270,7 +370,6 @@ class Postgres():
     #
     def create_task_table(self):
         """Create the table to track tasks"""
-        # TODO: try/catch rollback on commit
         cur = self.conn.cursor()
         cur.execute("""
         CREATE TABLE tangerine (
@@ -280,9 +379,9 @@ class Postgres():
             state                    varchar(10)   NOT NULL DEFAULT 'queued',
             dependencies             varchar[]     NOT NULL DEFAULT '{}',
             command                  varchar       NOT NULL DEFAULT '',
+            entrypoint               varchar       NOT NULL DEFAULT '',
             recoverable_exitcodes    integer[]     NOT NULL DEFAULT '{}',
             restartable              boolean       NOT NULL DEFAULT true,
-            entrypoint               varchar       NOT NULL DEFAULT '',
             datavolumes              varchar[]     NOT NULL DEFAULT '{}',
             environment              varchar[][2]  NOT NULL DEFAULT '{}',
             imageuuid                varchar       NOT NULL,
@@ -296,6 +395,7 @@ class Postgres():
             failures                 integer       NOT NULL DEFAULT 0,
             max_failures             integer       NOT NULL DEFAULT 3,
             service_id               varchar(10)   NOT NULL DEFAULT '',
+            run_id                   integer,
             count                    integer       NOT NULL DEFAULT 0,
             delay                    integer       NOT NULL DEFAULT 0,
             reschedule_delay         integer       NOT NULL DEFAULT 5,
@@ -305,7 +405,6 @@ class Postgres():
     
     def create_user_table(self):
         """Create the table to store authorized users"""
-        # TODO: try/catch rollback on commit
         cur = self.conn.cursor()
         cur.execute("""
         CREATE TABLE authorized_users (
@@ -315,9 +414,56 @@ class Postgres():
         );""")
         self.conn.commit()
 
+    def create_task_queue(self):
+        """Create the table to be used as a queue for tangerine in HA"""
+        cur = self.conn.cursor()
+        cur.execute("""
+        CREATE TABLE task_queue (
+            id integer
+        );""")
+        self.conn.commit()
+        
     def create_task_history_table(self):
-        #TODO
-        print "WIP"
+        """Create the table to store task run history"""
+        cur = self.conn.cursor()
+        cur.execute("""
+        CREATE TABLE task_history (
+            run_id                   serial        PRIMARY KEY,
+            task_id                  integer       NOT NULL,
+            name                     varchar(100)  NOT NULL,
+            description              varchar,
+            result_state             varchar(10),
+            result_exitcode          integer,
+            dependencies             varchar[]     NOT NULL,
+            dependencies_str         varchar,
+            command                  varchar       NOT NULL,
+            entrypoint               varchar       NOT NULL,
+            recoverable_exitcodes    integer[]     NOT NULL,
+            restartable              boolean       NOT NULL,
+            datavolumes              varchar[]     NOT NULL,
+            environment              varchar[][2]  NOT NULL,
+            imageuuid                varchar       NOT NULL,
+            cron                     varchar(100)  NOT NULL,
+            run_start_time           integer,
+            run_finish_time          integer,
+            run_start_time_str       varchar,
+            run_finish_time_str      varchar,
+            elapsed_time             varchar,
+            max_cpu                  varchar,
+            max_memory               varchar,
+            max_network_in           varchar,
+            max_network_out          varchar,
+            max_diskio_in            varchar,
+            max_diskio_out           varchar,
+            cpu_history              varchar[]     NOT NULL DEFAULT '{}',
+            memory_history           varchar[]     NOT NULL DEFAULT '{}',
+            network_in_history       varchar[]     NOT NULL DEFAULT '{}',
+            network_out_history      varchar[]     NOT NULL DEFAULT '{}',
+            disk_in_history          varchar[]     NOT NULL DEFAULT '{}',
+            disk_out_history         varchar[]     NOT NULL DEFAULT '{}',
+            log                      varchar
+        );""")
+        self.conn.commit()
     
     def create_options_table(self):
         #TODO

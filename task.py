@@ -5,6 +5,7 @@ from time import mktime, strftime, time
 from croniter import croniter
 from datetime import datetime
 from json import dumps
+import copy
 
 from postgres_connection import PGconnection
 global postgres
@@ -29,7 +30,20 @@ class Task(object):
         for i in range(len(values)):
             setattr(self, columns[i][0], values[i])
 
-        # Interpolate enviroment variables
+        # Interpolate variables
+        setattr(self, "command_raw", self.command)
+        if self.command:
+            self.command = self.command.replace("$$count", str(self.count))
+            self.command = self.command.replace("$$date", strftime("%Y%m%d"))
+            self.command = self.command.replace("$$time", strftime("%H%M%S"))
+        
+        setattr(self, "entrypoint_raw", self.entrypoint)
+        if self.entrypoint:
+            self.entrypoint = self.entrypoint.replace("$$count", str(self.count))
+            self.entrypoint = self.entrypoint.replace("$$date", strftime("%Y%m%d"))
+            self.entrypoint = self.entrypoint.replace("$$time", strftime("%H%M%S"))
+          
+        setattr(self, "environment_raw", copy.deepcopy(self.environment))
         if self.environment:
             for i in range(len(self.environment)):
                 self.environment[i][1] = self.environment[i][1].replace("$$count", str(self.count))
@@ -79,8 +93,13 @@ class Task(object):
             query = "UPDATE "+postgres.table+" SET "+column+"='"+str(value)+"'"
         
         cur = postgres.conn.cursor()
-        cur.execute(query + " WHERE name='"+str(self.name)+"';")
-        postgres.conn.commit()
+        try:
+            cur.execute(query + " WHERE name='"+str(self.name)+"';")
+            postgres.conn.commit()
+            return True
+        except:
+            postgres.conn.rollback()
+            return False
 
     def waiting_on_dependencies(self):
         """
@@ -102,6 +121,7 @@ class Task(object):
         completed_dependencies = 0
         cur = postgres.conn.cursor()
         cur.execute("SELECT name, state, next_run_time FROM tangerine;")
+        postgres.conn.commit()
         
         for task in cur.fetchall():
             if task[0] in self.dependencies:
@@ -139,23 +159,35 @@ class Task(object):
         """Go through the process to mark a task as ready"""
         self.update("state", "ready")
 
-    def running(self, service_id):
-        """Go through the process to mark a task as running"""
+    def running(self, service_id, run_id):
+        """
+        Go through the process to mark a task as running
+        Create an entry in the task_history table
+        
+        Args:
+            service_id: The id of the service that was created in Rancher to run this task
+        """
         self.update("service_id", service_id)
+        self.update("run_id", run_id)
         self.update("count", self.count + 1)
         self.set_last_run_time()
         self.update("state", "running")
+        
+        # Log the run in the history table
+        self.create_run(run_id)
 
     def success(self):
         """Go through the process to mark a task as success"""
         if self.cron: self.set_next_run_time()
         self.update("service_id", "")
+        self.update("run_id", "")
         self.set_last_success_time()
         self.update("state", "success")
-
+        
     def failed(self):
         """Go through the process to mark a task as failed"""
         self.update("service_id", "")
+        self.update("run_id", "")
         self.update("failures", self.failures+1)
         self.set_last_fail_time()
         self.update("state", "failed")
@@ -203,6 +235,8 @@ class Task(object):
         if not self.next_run_time:
             if self.cron:
                 self.set_next_run_time()
+            else:
+                return False
 
         # Check that the current time has passed the run time
         elif self.next_run_time <= int(time()):
@@ -222,3 +256,36 @@ class Task(object):
         else:
             self.update("state", "disabled")
             self.update("disabled_time", int(time()))
+            
+    def create_run(self, run_id):
+        global postgres
+
+        query = "INSERT INTO task_history (" + \
+                "run_id, task_id, name, description, dependencies, dependencies_str, command, entrypoint" + \
+                ", recoverable_exitcodes, restartable, datavolumes" + \
+                ", environment, imageuuid, cron, run_start_time, run_start_time_str" + \
+                ") VALUES (" + \
+                str(run_id) + \
+                ", " + str(self.id) + \
+                ", '" + self.name + \
+                "', '" + self.description.replace("'","''") + \
+                "', '" + "{" + ', '.join(self.dependencies) + "}" + \
+                "', '" + ', '.join(self.dependencies) + \
+                "', '" + self.command + \
+                "', '" + self.entrypoint + \
+                "', '" + "{" + ', '.join([str(i) for i in self.recoverable_exitcodes]) + "}" + \
+                "', " + str(self.restartable) + \
+                ", '" + "{" + ', '.join(self.datavolumes) + "}" + \
+                "', '" + "{" + ', '.join(["{" + env[0] + "," + env[1] + "}" for env in self.environment]) + "}" + \
+                "', '" + self.imageuuid + \
+                "', '" + self.cron + \
+                "', '" + str(self.last_run_time) + \
+                "', '" + datetime.fromtimestamp(self.last_run_time).strftime('%I:%M%p %B %d, %Y') + \
+                "');"
+
+        cur = postgres.conn.cursor()
+        try:
+            cur.execute(query)
+            postgres.conn.commit()
+        except:
+            postgres.conn.rollback()

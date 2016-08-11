@@ -34,4 +34,9 @@ class PGconnection():
 
         conn_str = "host="+self.host+" dbname="+self.dbname+" user="+self.user+" port="+str(self.port)
         if self.pswd: conn_str += " password="+self.pswd
-        setattr(self, "conn", connect(conn_str))        
+        setattr(self, "conn_str", conn_str)
+        self.reconnect()
+        
+    def reconnect(self):
+        """Connect to the postgres database"""
+        setattr(self, "conn", connect(self.conn_str))        

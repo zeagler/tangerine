@@ -17,7 +17,7 @@
         <li class="active"><a href="#container" data-toggle="tab">Container</a></li>
         <li><a href="#env-pane" data-toggle="tab">Environment</a></li>
         <li><a href="#sch" data-toggle="tab">Scheduling</a></li>
-        <li><a href="#rsrt" data-toggle="tab">Restart</a></li>
+        <li><a href="#restart" data-toggle="tab">Restart</a></li>
     </ul>
     <div class="tab-content">
         <div class="tab-pane active" id="container">
@@ -29,11 +29,11 @@
             </div>
             <div class="form-group">
                 <label class="control-label col-sm-2">Command</label>
-                <div class="col-sm-10"><input class="form-control" name="cmd" value="${task.command}"></div>
+                <div class="col-sm-10"><input class="form-control" name="cmd" value="${task.command_raw}"></div>
             </div>
             <div class="form-group">
                 <label class="control-label col-sm-2">Entrypoint</label>
-                <div class="col-sm-10"><input class="form-control" name="etp" value="${task.entrypoint}"></div>
+                <div class="col-sm-10"><input class="form-control" name="etp" value="${task.entrypoint_raw}"></div>
             </div>
             <div class="form-group">
                 <label class="control-label col-sm-2 disabled">Working Dir</label>
@@ -57,7 +57,7 @@
                     </button>
                 </span>
                 <div id="env">
-                    % for env in task.environment:
+                    % for env in task.environment_raw:
                         <span class="form-inline col-sm-10 pull-right added env"><span class="pull-left" style="width: 100%">
                             <input class="input form-control" style="width: 46%" type="text" value="${env[0]}">
                             <span> = </span>
@@ -143,9 +143,13 @@
                 <div class="col-sm-10"><input class="form-control" name="cron" value="${task.cron}"></div>
             </div>
         </div>
-        <div class="tab-pane" id="rsrt">
+        <div class="tab-pane" id="restart">
             <div class="form-group">
-                <input type="checkbox" class="checkbox-inline" id="rsrt" name="rsrt" checked="true" value="${task.restartable}">
+                % if task.restartable:
+                    <input type="checkbox" class="checkbox-inline" id="rsrt" checked="true">
+                % else:
+                    <input type="checkbox" class="checkbox-inline" id="rsrt" value="false">
+                % endif
                 <label class="control-label">Restartable</label>
             </div>
             <div class="form-group">

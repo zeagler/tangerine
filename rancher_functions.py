@@ -3,6 +3,7 @@ This module has functions to connect to and communicate with the Rancher API
 """
 from cattle import Client
 from settings import Rancher as options
+from settings import Postgresql as postgres_options
 
 class Host(object):
     def __init__(self, host, client):
@@ -102,22 +103,29 @@ class Rancher(object):
         """Return a service that has the specified serviceId"""
         return self.client.by_id_service(serviceId)
 
-    def get_container_by_service(self, service):
+    def get_container_by_service(self, service, stack=None):
         """
         Return a container that was started by the specified service
         
         Args:
             stack_service: The io.rancher.stack_service.name label value to search for 
         """
+        if stack is None: stack = self.stack
+        
         for container in self.client.list_container():
             if 'io.rancher.stack_service.name' in container.labels.keys():
-                if container.labels['io.rancher.stack_service.name'] == self.stack + "/" + service:
+                if container.labels['io.rancher.stack_service.name'] == stack + "/" + service:
                     return container
         return None
 
     def get_host_by_id(self, hostId):
         """Return the host that has the specified hostId"""
-        return Host(self.client.by_id_host(hostId), self.client)
+        host = self.client.by_id_host(hostId)
+        
+        if host:
+            return Host(host, self.client)
+        else:
+            return None
 
     def list_hosts(self):
         """Return all the hosts in the environment"""
@@ -174,7 +182,7 @@ class Rancher(object):
 
         return None
 
-    def create_service(self, host, task):
+    def create_service(self, host, task, run_id):
         """
         Create a service to run a task
         
@@ -205,7 +213,8 @@ class Rancher(object):
             "entrypoint": task.entrypoint.split(" "),
             "name": task_name,
             "labels": {
-              "io.rancher.container.start_once": "true"
+              "io.rancher.container.start_once": "true",
+              "tangerine.task.container.name": task_name
             },
             "requestedHostId": host.id,
             "imageUuid": image
@@ -213,19 +222,21 @@ class Rancher(object):
           secondaryLaunchConfigs=[
             {
               "dataVolumes": ["/var/run/docker.sock:/var/run/docker.sock",
-                              self.sidekick_script_path + ":/sidekick.sh"],
-              "environment": {"CATTLE_URL": self.url,
-                              "CATTLE_ACCESS_KEY": self.access_key,
-                              "CATTLE_SECRET_KEY": self.secret_key,
-                              "CONTAINER_NAME": self.environment.name + "_Task-" + task_name + "_1",
-                              "HOST_ID": host.id
+                              "/home/ubuntu/shared/logs/tangerine:/logs"],
+              "environment": {"CONTAINER_NAME": task_name,
+                              "RUN_ID": run_id,
+                              "PGHOST": postgres_options['PGHOST'],
+                              "PGUSER": postgres_options['PGUSER'],
+                              "PGPASS": postgres_options['PGPASS'],
+                              "PGPORT": postgres_options['PGPORT'],
+                              "PGDATABASE": postgres_options['PGDATABASE']
                               },
-              "entryPoint": ["bash", "/sidekick.sh"],
-              "name": 'SideKick-' + task_name,
+              "name": 'Tangerine-Agent-' + task_name,
               "labels": {
                 "io.rancher.container.start_once": "true"
               },
-              "imageUuid": "docker:rancher/agent"
+              "requestedHostId": host.id,
+              "imageUuid": "docker:zeagler/tangerine-agent"
             }
           ],
           startOnCreate="true"

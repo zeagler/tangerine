@@ -165,3 +165,7 @@ body {
 .tt-suggestion p {
   margin: 0;
 }
+
+#run_history {
+    height: calc(100vh - 220px);
+}

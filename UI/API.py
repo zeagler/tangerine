@@ -1,10 +1,5 @@
 # TODO:
-#   Add a task
-#   Update a task
 #   -Delete a task
-#   -Get all tasks
-#   -Get specific task
-#   -Get Users
 #   Get task history
 #   Get hosts - Rancher and AWS
 #   Get specific host
@@ -212,3 +207,29 @@ class API(object):
         """
         return dumps([task.__dict__ for task in self.postgres.get_tasks()])
       
+    def get_runs(self):
+        """
+        Get information of all runs in the database
+        
+        Args: None
+        
+        Return:
+            a json response of all the tasks
+        """
+        return '{ "data": [ ' + ", ".join([run.json for run in self.postgres.get_runs()]) + ']}'
+      
+    def get_run_object(self, id):
+        """
+        Get a specific run's information
+        
+        Args:
+            id: The id of the run to get
+            
+        Return:
+            if success: A json response of the run
+            if failed: a proper error code
+        """
+        if not id:
+            return dumps({"error": "Run ID is not defined"})
+      
+        return self.postgres.get_run(id)
