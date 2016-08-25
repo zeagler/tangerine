@@ -225,7 +225,6 @@ class Statuspage(object):
           
         # if the session isn't authorized send the user to the login
         if not cherrypy.session.get("authorized", None):
-            cherrypy.session["redirect"] = cherrypy.request.wsgi_environ['REQUEST_URI']
             raise cherrypy.HTTPRedirect("/")
         
         tmpl = lookup.get_template("update_task.html.mako")
@@ -242,7 +241,6 @@ class Statuspage(object):
           
         # if the session isn't authorized send the user to the login
         if not cherrypy.session.get("authorized", None):
-            cherrypy.session["redirect"] = cherrypy.request.wsgi_environ['REQUEST_URI']
             raise cherrypy.HTTPRedirect("/")
         
         tmpl = lookup.get_template("new_task.html.mako")
@@ -259,7 +257,6 @@ class Statuspage(object):
           
         # if the session isn't authorized send the user to the login
         if not cherrypy.session.get("authorized", None):
-            cherrypy.session["redirect"] = cherrypy.request.wsgi_environ['REQUEST_URI']
             raise cherrypy.HTTPRedirect("/")
         
         tmpl = lookup.get_template("new_task.html.mako")
@@ -276,7 +273,6 @@ class Statuspage(object):
           
         # if the session isn't authorized send the user to the login
         if not cherrypy.session.get("authorized", None):
-            cherrypy.session["redirect"] = cherrypy.request.wsgi_environ['REQUEST_URI']
             raise cherrypy.HTTPRedirect("/")
         
         tmpl = lookup.get_template("display_task.html.mako")
@@ -293,7 +289,6 @@ class Statuspage(object):
           
         # if the session isn't authorized send the user to the login
         if not cherrypy.session.get("authorized", None):
-            cherrypy.session["redirect"] = cherrypy.request.wsgi_environ['REQUEST_URI']
             raise cherrypy.HTTPRedirect("/")
         
         tmpl = lookup.get_template("display_run.html.mako")
@@ -337,7 +332,6 @@ class Statuspage(object):
           
         # if the session isn't authorized send the user to the login
         if not cherrypy.session.get("authorized", None):
-            cherrypy.session["redirect"] = cherrypy.request.wsgi_environ['REQUEST_URI']
             raise cherrypy.HTTPRedirect("/")
         
         return API.get_task(id)
@@ -353,8 +347,6 @@ class Statuspage(object):
           
         # if the session isn't authorized send the user to the login
         if not cherrypy.session.get("authorized", None):
-            # don't redirect to this page on login
-            # cherrypy.session["redirect"] = cherrypy.request.wsgi_environ['REQUEST_URI']
             raise cherrypy.HTTPRedirect("/")
         
         return API.get_tasks()
@@ -370,7 +362,6 @@ class Statuspage(object):
           
         # if the session isn't authorized send the user to the login
         if not cherrypy.session.get("authorized", None):
-            cherrypy.session["redirect"] = cherrypy.request.wsgi_environ['REQUEST_URI']
             raise cherrypy.HTTPRedirect("/")
           
         if cherrypy.session.get("usertype", "user") == "admin":
@@ -393,7 +384,6 @@ class Statuspage(object):
           
         # if the session isn't authorized send the user to the login
         if not cherrypy.session.get("authorized", None):
-            cherrypy.session["redirect"] = cherrypy.request.wsgi_environ['REQUEST_URI']
             raise cherrypy.HTTPRedirect("/")
         
         return API.disable_task(id)
@@ -409,13 +399,12 @@ class Statuspage(object):
           
         # if the session isn't authorized send the user to the login
         if not cherrypy.session.get("authorized", None):
-            cherrypy.session["redirect"] = cherrypy.request.wsgi_environ['REQUEST_URI']
             raise cherrypy.HTTPRedirect("/")
         
         return API.stop_task(id)
       
     @cherrypy.expose
-    def queue_task(self, id):
+    def queue_task(self, id, username):
         # Redirect HTTP to HTTPS
         if cherrypy.request.scheme == "http":
             redirect_url = cherrypy.request.base
@@ -425,10 +414,9 @@ class Statuspage(object):
           
         # if the session isn't authorized send the user to the login
         if not cherrypy.session.get("authorized", None):
-            cherrypy.session["redirect"] = cherrypy.request.wsgi_environ['REQUEST_URI']
             raise cherrypy.HTTPRedirect("/")
         
-        return API.queue_task(id)
+        return API.queue_task(id, username)
       
 def secureheaders():
     headers = cherrypy.response.headers

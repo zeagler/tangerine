@@ -7,21 +7,24 @@
 
         <script src="https://code.jquery.com/jquery-3.0.0.min.js"></script>
 
+        <!-- Patternfly -->
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/patternfly/3.8.1/css/patternfly.min.css">
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/patternfly/3.8.1/css/patternfly-additions.min.css">
         <script src="https://cdnjs.cloudflare.com/ajax/libs/patternfly/3.8.1/js/patternfly.min.js"></script>
 
-        <!-- Bootstrap -->
+        <!-- Bootstrap Cerulean Theme -->
         <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootswatch/3.3.6/cerulean/bootstrap.min.css">
         <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js" integrity="sha384-Tc5IQib027qvyjSMfHjOMaLkfuWVxZxUPnCJA7l2mCWNIpG9mGCD8wGNIcPD7Txa" crossorigin="anonymous"></script>
-
-        <!-- Typeahead -->
-        <script src="https://twitter.github.io/typeahead.js/releases/latest/typeahead.bundle.js"></script>
-
-        <!-- FuelUX -->
+        
+        <!-- FuelUX, to be removed -->
         <link href="https://www.fuelcdn.com/fuelux/3.13.0/css/fuelux.min.css" rel="stylesheet">
         <script src="https://www.fuelcdn.com/fuelux/3.13.0/js/fuelux.min.js"></script>
 
+        
+        <!-- Typeahead -->
+        <script src="https://twitter.github.io/typeahead.js/releases/latest/typeahead.bundle.js"></script>
+
+        <!-- Tangerine scriptes -->
         <script src="static/scripts.js"></script>
         
         <script>
@@ -41,6 +44,7 @@
                 <ul class="nav navbar-nav">
                     <li class="active"><a>Overview</a></li>
                     <li><a href="/history">History</a></li>
+                    <li><a>Infrastructure</a></li>
                 </ul>
                 <ul class="nav navbar-nav navbar-right">
                     % if usertype == "admin":
@@ -101,63 +105,24 @@
         
         <div class="modal fade" id="updateTaskModal" role="dialog" data-backdrop="static">
             <div class="modal-dialog modal-lg">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <button type="button" class="close" data-dismiss="modal">&times;</button>
-                        <h4 class="modal-title">Update a Task</h4>
-                    </div>
-                    
-                    <div id="update-task-modal-body" class="modal-body" style="text-align: center;">
-                        <!-- Templated by mako and update_task.html.mako -->
-                    </div>
-                    
-                    <div class="modal-footer" style="width: 100%; text-align:center">
-                        <button type="button" class="btn btn-default pull-left" style="width: 100px;" data-dismiss="modal">Close</button>
-                        <button type="button" class="btn btn-default pull-left reset-form" style="width: 100px;">Reset</button>
-                        <button type="button" class="btn btn-primary pull-right" style="width: 100px;" onclick="addTask()" data-dismiss="modal">Update</button>
-                    </div>
+                <div id="update-task-modal-content" class="modal-content">
+                    <!-- Templated by mako and update_task.html.mako -->
                 </div>
             </div>
         </div>
         
         <div class="modal fade" id="cloneTaskModal" role="dialog" data-backdrop="static">
             <div class="modal-dialog modal-lg">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <button type="button" class="close" data-dismiss="modal">&times;</button>
-                        <h4 class="modal-title">Add a Task</h4>
-                    </div>
-                    
-                    <div id="clone-task-modal-body" class="modal-body" style="text-align: center;">
-                        <!-- Templated by mako and update_task.html.mako -->
-                    </div>
-                    
-                    <div class="modal-footer" style="width: 100%; text-align:center">
-                        <button type="button" class="btn btn-default pull-left" style="width: 100px;" data-dismiss="modal">Close</button>
-                        <button type="button" class="btn btn-default pull-left reset-form" style="width: 100px;">Reset</button>
-                        <button type="button" class="btn btn-primary pull-right" style="width: 100px;" onclick="addTask()" data-dismiss="modal">Add</button>
-                    </div>
+                <div id="clone-task-modal-content" class="modal-content">
+                    <!-- Templated by mako and update_task.html.mako -->
                 </div>
             </div>
         </div>
         
         <div class="modal fade" id="addTaskModal" role="dialog" data-backdrop="static">
             <div class="modal-dialog modal-lg">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <button type="button" class="close" data-dismiss="modal">&times;</button>
-                        <h4 class="modal-title">Add a Task</h4>
-                    </div>
-
-                    <div id="add-task-modal-body" class="modal-body" style="text-align: center;">
-                        <!-- filled with /static/new_task.html.mako -->
-                    </div>
-
-                    <div class="modal-footer" style="width: 100%; text-align:center">
-                        <button type="button" class="btn btn-default pull-left" style="width: 100px;" data-dismiss="modal">Close</button>
-                        <button type="button" class="btn btn-default pull-left reset-form" style="width: 100px;">Clear</button>
-                        <button type="button" class="btn btn-primary pull-right" style="width: 100px;" onclick="addTask()" data-dismiss="modal">Add</button>
-                    </div>
+                <div id="add-task-modal-content" class="modal-content">
+                    <!-- Templated by mako and new_task.html.mako -->
                 </div>
             </div>
         </div>

@@ -7,16 +7,16 @@
 
         <script src="https://code.jquery.com/jquery-2.2.4.min.js"></script>
 
+        <!-- jQuery datatables -->
         <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/v/bs-3.3.6/dt-1.10.12/b-1.2.2/r-2.1.0/sc-1.4.2/datatables.min.css"/> 
         <script type="text/javascript" src="https://cdn.datatables.net/v/bs-3.3.6/dt-1.10.12/b-1.2.2/r-2.1.0/sc-1.4.2/datatables.min.js"></script>
 
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/patternfly/3.8.1/css/patternfly.min.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/patternfly/3.8.1/css/patternfly-additions.min.css">
-        <script src="https://cdnjs.cloudflare.com/ajax/libs/patternfly/3.8.1/js/patternfly.min.js"></script>
-
+        <!-- Bootstrap Cerulean Theme -->
         <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootswatch/3.3.6/cerulean/bootstrap.min.css">
-        <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.2.1/Chart.min.js"></script>
-
+        
+        <!-- Plot.ly for metric charts -->
+        <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+        
         <!-- Tangerine Scripts -->
         <script src="static/scripts.js"></script>
     </head>
@@ -26,7 +26,8 @@
             <div class="container-fluid">
                 <ul class="nav navbar-nav">
                     <li><a href="/">Overview</a></li>
-                    <li class="active"><a>History</a></li>
+                    <li class="active"><a href="/history">History</a></li>
+                    <li><a>Infrastructure</a></li>
                 </ul>
                 <ul class="nav navbar-nav navbar-right">
                     % if usertype == "admin":

@@ -140,7 +140,7 @@ class API(object):
             
         return dumps({"error": "Requested task does not exist"})
               
-    def queue_task(self, id):
+    def queue_task(self, id, username):
         """
         Stop a task.
         
@@ -157,7 +157,7 @@ class API(object):
         task = self.postgres.get_task(id)
         
         if task:
-            task.queue("misfire")
+            task.queue("misfire", username)
             return dumps({"success": "Task was queued"})
             
         return dumps({"error": "Requested task does not exist"})

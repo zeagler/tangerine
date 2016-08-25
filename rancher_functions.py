@@ -205,16 +205,16 @@ class Rancher(object):
     
         return self.client.create_service (
           environmentId=self.environment.id,
-          name="Task-" + task_name,
+          name="Task-" + task_name + "-" + str(run_id),
           launchConfig={
             "command": task.command.split(" "),
             "dataVolumes": task.datavolumes,
             "environment": env_variables,
             "entrypoint": task.entrypoint.split(" "),
-            "name": task_name,
+            "name": task_name + "-" + str(run_id),
             "labels": {
               "io.rancher.container.start_once": "true",
-              "tangerine.task.container.name": task_name
+              "tangerine.task.container.name": task_name + "-" + str(run_id)
             },
             "requestedHostId": host.id,
             "imageUuid": image
@@ -223,7 +223,7 @@ class Rancher(object):
             {
               "dataVolumes": ["/var/run/docker.sock:/var/run/docker.sock",
                               "/home/ubuntu/shared/logs/tangerine:/logs"],
-              "environment": {"CONTAINER_NAME": task_name,
+              "environment": {"CONTAINER_NAME": task_name + "-" + str(run_id),
                               "RUN_ID": run_id,
                               "PGHOST": postgres_options['PGHOST'],
                               "PGUSER": postgres_options['PGUSER'],
@@ -231,9 +231,10 @@ class Rancher(object):
                               "PGPORT": postgres_options['PGPORT'],
                               "PGDATABASE": postgres_options['PGDATABASE']
                               },
-              "name": 'Tangerine-Agent-' + task_name,
+              "name": 'Tangerine-Agent-' + task_name + "-" + str(run_id),
               "labels": {
-                "io.rancher.container.start_once": "true"
+                "io.rancher.container.start_once": "true",
+                "tangerine.task.container.name": 'Tangerine-Agent-' + task_name + "-" + str(run_id)
               },
               "requestedHostId": host.id,
               "imageUuid": "docker:zeagler/tangerine-agent"

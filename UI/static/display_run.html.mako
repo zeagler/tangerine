@@ -10,7 +10,7 @@
                 <li><a href="#log" data-toggle="tab">Log</a></li>
             </ul>
             
-            <div class="tab-content">
+            <div class="tab-content" style="width: 100%;">
                 <div class="tab-pane active" id="details">
                     <dl class="dl-horizontal pull-left">
                         <dt>Start: </dt><dd>${run.run_start_time_str}</dd>
@@ -32,16 +32,9 @@
                         <dt>Console </dt><dd></dd>
                     </dl>
                 </div>
-                <div class="tab-pane" id="metrics">
-                    <label for = "memory" style="height: 40%; width: 100%">
-                        Memory<br />
-                        <canvas id="memory"></canvas>
-                    </label>
-                    
-                    <label for = "cpu" style="height: 40%; width: 100%">
-                        CPU<br />
-                    <canvas id="cpu"></canvas>
-                    </label>
+                <div class="tab-pane" id="metrics" style="width: 100%;">
+                    <div id="memory"></div>
+                    <div id="cpu"></div>
                 </div>
                 <div class="tab-pane" id="log">
                     <p>WIP</p>
@@ -54,79 +47,43 @@
         </div>
         
         <script>
-
-        var ctx_mem = document.getElementById("memory");
-        var ctx_cpu = document.getElementById("cpu");
-        
-        var memory = new Chart(ctx_mem, {
-            type: 'line',
-            data: {
-                labels: ${[i for i in range(0, len(run.memory_history))]},
-                datasets: [{
-                    backgroundColor: 'rgba(255, 99, 132, 0.2)',
-                    data: ${run.memory_history},
-                    borderWidth: 1,
-                    pointRadius: 0
-                }]
-            },
-            animation:false,
-            options:
-            {
-                maintainAspectRatio: false,
-                legend: {
-                  display: false
+            var memory = {
+                name: 'Memory',
+                y: ${run.memory_history},
+                fillcolor: "rgba(255, 99, 132, 0.2)",
+                line: {color: "rgba(255, 99, 132, 0.3)"},
+                fill: 'tozeroy',
+                type: 'scatter',
+            };
+            
+            var mem_layout = {
+                autosize: false,
+                height: 200,
+                width: 800,
+                margin: {l: 30, r: 20, b: 20, t: 25},
+                title: 'Memory',
+                yaxis: {
+                    exponentformat: 'SI',
                 },
-                scales:
-                {
-                    xAxes: [{
-                        display: false
-                    }],
-                    yAxes: [{
-                        scaleOverride:true,
-                        scaleSteps:9,
-                        scaleStartValue:0,
-                        scaleStepWidth:100,
-                        gridLines: {
-                            display:false
-                        }   
-                    }]
-                }
-            }
-        });
-        
-        var cpu = new Chart(ctx_cpu, {
-            type: 'line',
-            data: {
-                labels: ${[i for i in range(0, len(run.cpu_history))]},
-                datasets: [{
-                    backgroundColor: 'rgba(54, 162, 235, 0.2)',
-                    data: ${run.cpu_history},
-                    borderWidth: 1,
-                    pointRadius: 0
-                }]
-            },
-            animation:false,
-            options:
-            {
-                maintainAspectRatio: false,
-                legend: {
-                  display: false
-                },
-                scales:
-                {
-                    xAxes: [{
-                        display: false
-                    }],
-                    yAxes: [{
-                        scaleOverride:true,
-                        scaleSteps:9,
-                        scaleStartValue:0,
-                        scaleStepWidth:100,
-                        gridLines: {
-                            display:false
-                        }   
-                    }]
-                }
-            }
-        });
+            };
+            
+            var cpu = {
+                name: 'CPU',
+                y: ${run.cpu_history},
+                fillcolor: "rgba(54, 162, 235, 0.2)",
+                line: {color: "rgba(54, 162, 235, 0.3)"},
+                fill: 'tozeroy',
+                type: 'scatter',
+            };     
+            
+            var cpu_layout = {
+                autosize: false,
+                height: 200,
+                width: 800,
+                margin: {l: 30, r: 20, b: 20, t: 25},
+                title: 'CPU',
+            };
+            
+            Plotly.newPlot('memory', [memory], mem_layout);
+            Plotly.newPlot('cpu', [cpu], cpu_layout);
         </script>

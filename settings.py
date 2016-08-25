@@ -7,7 +7,7 @@ TODO: save settings in the database
 import os
 import yaml
 
-global config, Amazon, Web, Postgresql, Slack, Rancher
+global config, Amazon, Docker, Web, Postgresql, Slack, Rancher
 config = yaml.safe_load(open(os.path.abspath(os.getcwd()) + "/config.yml"))
 
 def check_amazon():
@@ -22,6 +22,10 @@ def check_amazon():
     if not Amazon['ENABLED']:                        Amazon['ENABLED'] = False
     if not Amazon['EC2_SCALE_LIMIT']:                Amazon['EC2_SCALE_LIMIT'] = 20
     if not Amazon['SPOT_FLEET_REQUEST_ID']:          Amazon['ENABLED'] = False; Amazon['SPOT_FLEET_REQUEST_ID'] = ""
+
+def check_docker():
+    global Docker
+    Docker = config['Docker']
 
 def check_postgresql():
     """Check that the Postgresql settings are proper"""
@@ -88,6 +92,7 @@ def check_web_interface():
     if not Web['SSL_PRIVATE_KEY']:                print "SSL_PRIVATE_KEY is not set, SSL is required for now"; exit(1)
 
 check_amazon()
+check_docker()
 check_postgresql()
 check_rancher()
 check_slack()

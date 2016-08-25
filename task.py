@@ -72,7 +72,7 @@ class Task(object):
         return ', '.join("%s: %s" % item for item in vars(self).items())    
 
     def initialize(self):
-        """Call this when a task is inserted or upgraded"""
+        """Call this when a task is inserted or updated"""
         self.set_next_run_time()
         self.set_modified_time()
 
@@ -133,41 +133,55 @@ class Task(object):
         else:
             return True
 
-    def queue(self, cause):
+    def queue(self, cause, username=None):
         """
         Go through the process to mark a task as queued
         Different causes have a different queue process
         """
         if cause == "failed":
-            self.update("service_id", "")
+            self.update("queued_by", "auto-restart")
             self.update("failures", self.failures+1)
             self.update("delay", self.reschedule_delay)
             self.set_last_fail_time()
             self.update("state", "queued")
+            
         elif cause == "host" or cause == "container":
-            self.update("service_id", "")
+            self.update("queued_by", "auto-restart")
             self.update("state", "queued")
+            
         elif cause == "cron":
+            self.update("queued_by", "cron")
             self.update("failures", 0)
             self.update("next_run_time", None)
             self.update("state", "queued")
+            
         elif cause == "misfire":
+            self.update("queued_by", username)
             self.update("failures", 0)
-            self.update("state", "queued")
+
+            if self.state == "running":
+                self.stop()
+                self.update("next_state", "queued")
+                
+            elif self.state == "stopping":
+                self.update("next_state", "queued")
+            
+            else:
+                self.update("state", "queued")
 
     def ready(self):
         """Go through the process to mark a task as ready"""
         self.update("state", "ready")
 
-    def running(self, service_id, run_id):
+    def starting(self):
+        """Go through the process to mark a task as starting"""
+        self.update("state", "starting")
+
+    def running(self, run_id):
         """
         Go through the process to mark a task as running
         Create an entry in the task_history table
-        
-        Args:
-            service_id: The id of the service that was created in Rancher to run this task
         """
-        self.update("service_id", service_id)
         self.update("run_id", run_id)
         self.update("count", self.count + 1)
         self.set_last_run_time()
@@ -179,14 +193,12 @@ class Task(object):
     def success(self):
         """Go through the process to mark a task as success"""
         if self.cron: self.set_next_run_time()
-        self.update("service_id", "")
         self.update("run_id", "")
         self.set_last_success_time()
         self.update("state", "success")
         
     def failed(self):
         """Go through the process to mark a task as failed"""
-        self.update("service_id", "")
         self.update("run_id", "")
         self.update("failures", self.failures+1)
         self.set_last_fail_time()
@@ -197,14 +209,24 @@ class Task(object):
         if self.state == "running":
             self.update("state", "stopping")
         else:
-            self.update("state", "stopped")
+            if self.next_state:
+                self.update("state", self.next_state)
+                self.update("next_state", "")
+            else:
+                self.update("state", "stopped")
 
     def set_next_run_time(self, cron=None):
         """Use croniter to generate the next run time based on the cron schedule"""
         
         # Check twice, first set cron if it wasn't user-defined, then check if it is still empty
-        if not cron: cron = self.cron
-        if not cron: return
+        if not cron:
+            cron = self.cron
+            
+        if not cron:
+            if self.next_run_time:
+                self.update("next_run_time", None)
+            return
+          
         new_iter = croniter(cron, datetime.now())
         next_run = int(mktime(new_iter.get_next(datetime).timetuple()))
         self.update("next_run_time", next_run)
@@ -263,7 +285,7 @@ class Task(object):
         query = "INSERT INTO task_history (" + \
                 "run_id, task_id, name, description, dependencies, dependencies_str, command, entrypoint" + \
                 ", recoverable_exitcodes, restartable, datavolumes" + \
-                ", environment, imageuuid, cron, run_start_time, run_start_time_str" + \
+                ", environment, imageuuid, cron, queued_by, run_start_time, run_start_time_str" + \
                 ") VALUES (" + \
                 str(run_id) + \
                 ", " + str(self.id) + \
@@ -271,14 +293,15 @@ class Task(object):
                 "', '" + self.description.replace("'","''") + \
                 "', '" + "{" + ', '.join(self.dependencies) + "}" + \
                 "', '" + ', '.join(self.dependencies) + \
-                "', '" + self.command + \
-                "', '" + self.entrypoint + \
+                "', '" + self.command.replace("'","''") + \
+                "', '" + self.entrypoint.replace("'","''") + \
                 "', '" + "{" + ', '.join([str(i) for i in self.recoverable_exitcodes]) + "}" + \
                 "', " + str(self.restartable) + \
                 ", '" + "{" + ', '.join(self.datavolumes) + "}" + \
-                "', '" + "{" + ', '.join(["{" + env[0] + "," + env[1] + "}" for env in self.environment]) + "}" + \
+                "', '" + "{" + ', '.join(["{" + env[0] + "," + env[1].replace("'","''") + "}" for env in self.environment]) + "}" + \
                 "', '" + self.imageuuid + \
                 "', '" + self.cron + \
+                "', '" + self.queued_by + \
                 "', '" + str(self.last_run_time) + \
                 "', '" + datetime.fromtimestamp(self.last_run_time).strftime('%I:%M%p %B %d, %Y') + \
                 "');"
@@ -287,5 +310,8 @@ class Task(object):
         try:
             cur.execute(query)
             postgres.conn.commit()
+            
         except:
+            print "Could not create an entry for run #" + str(run_id)
             postgres.conn.rollback()
+            

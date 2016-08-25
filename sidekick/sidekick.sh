@@ -67,13 +67,16 @@ until [ "$(docker inspect $CONTAINER_ID | jq '.[] | .State.Status')" != '"runnin
       BLK_OUT=$(convert_to_bytes $(echo $STATS | awk '{print $17,$18}'))
       
       psql -h $PGHOST -U $PGUSER -p $PGPORT -d $PGDATABASE -c "BEGIN;
-        UPDATE task_history SET cpu_history = cpu_history || '{$CPU}' WHERE run_id=$RUN_ID;
-        UPDATE task_history SET memory_history = memory_history || '{$MEM}' WHERE run_id=$RUN_ID;
-        UPDATE task_history SET network_in_history = network_in_history || '{$NET_IN}' WHERE run_id=$RUN_ID;
-        UPDATE task_history SET network_out_history = network_out_history || '{$NET_OUT}' WHERE run_id=$RUN_ID;
-        UPDATE task_history SET disk_in_history = disk_in_history || '{$BLK_IN}' WHERE run_id=$RUN_ID;
-        UPDATE task_history SET disk_out_history = disk_out_history || '{$BLK_OUT}' WHERE run_id=$RUN_ID;
-        COMMIT;"
+          UPDATE task_history SET  + \
+              time_scale = time_scale || '{$TIME}' WHERE run_id=$RUN_ID,
+              cpu_history = cpu_history || '{$CPU}' WHERE run_id=$RUN_ID,
+              memory_history = memory_history || '{$MEM}' WHERE run_id=$RUN_ID,
+              network_in_history = network_in_history || '{$NET_IN}' WHERE run_id=$RUN_ID,
+              network_out_history = network_out_history || '{$NET_OUT}' WHERE run_id=$RUN_ID,
+              disk_in_history = disk_in_history || '{$BLK_IN}' WHERE run_id=$RUN_ID,
+              disk_out_history = disk_out_history || '{$BLK_OUT}' WHERE run_id=$RUN_ID,
+              WHERE run_id=$RUN_ID;
+          COMMIT;"
   fi
   
   echo "waiting for parent container to finish"

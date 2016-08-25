@@ -55,13 +55,37 @@ class Run(object):
             postgres.conn.rollback()
             return False
         
-    def finish(self):
+    def insert_stats(self, stats):
+        query = "UPDATE task_history SET" + \
+              " time_scale = time_scale || '{" + str(stats['time']) + "}'," + \
+              " cpu_history = cpu_history || '{" + str(stats['cpu']) + "}'," + \
+              " memory_history = memory_history || '{" + str(stats['memory']) + "}'," + \
+              " network_in_history = network_in_history || '{" + str(stats['rx_bytes']) + "}'," + \
+              " network_out_history = network_out_history || '{" + str(stats['tx_bytes']) + "}'," + \
+              " disk_in_history = disk_in_history || '{" + str(stats['read_bytes']) + "}'," + \
+              " disk_out_history = disk_out_history || '{" + str(stats['write_bytes']) + "}'" + \
+              " WHERE run_id='" + str(self.run_id) + "';"
+
+        cur = postgres.conn.cursor()
+        
+        try:
+            cur.execute(query)
+            postgres.conn.commit()
+            return True
+        except:
+            postgres.conn.rollback()
+            return False
+        
+    def finish(self, exit_code):
         """
         Set the permanent values of this run after it has completed
         """
         
         # Set the result state based on the exit code
-        if self.result_exitcode == 0:
+        self.update("result_exitcode", exit_code)
+        if exit_code == "stopped" or exit_code == "host failure":
+            self.update("result_state", exit_code)
+        elif exit_code == 0:
             self.update("result_state", "success")
         else:
             self.update("result_state", "failed")
@@ -88,12 +112,3 @@ class Run(object):
             elapsed_string += " " + str(elapsed_minutes) + " minutes"
             
         self.update("elapsed_time", elapsed_string)
-        
-        
-        # Get max metric values
-        self.update("max_cpu", max(self.cpu_history) if self.cpu_history else "")
-        self.update("max_memory", max(self.memory_history) if self.memory_history else "")
-        self.update("max_network_in", max(self.network_in_history) if self.network_in_history else "")
-        self.update("max_network_out", max(self.network_out_history) if self.network_out_history else "")
-        self.update("max_diskio_in", max(self.disk_in_history) if self.disk_in_history else "")
-        self.update("max_diskio_out", max(self.disk_out_history) if self.disk_out_history else "")

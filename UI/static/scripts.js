@@ -1,5 +1,6 @@
 var button_map = {}
 button_map["running"]  = "btn btn-info task Running"
+button_map["starting"] = "btn btn-info task Running"
 button_map["ready"]    = "btn btn-primary task Ready"
 button_map["queued"]   = "btn btn-warning task Queued"
 button_map["waiting"]  = "btn btn-warning task Queued"
@@ -75,24 +76,9 @@ $(document).on('click', '#switch li', function (e) {
     show_state($(this).text());
 });
 
-$('.reset-form').on('click', function(e) {
-    e.preventDefault();
-    
-    document.getElementById('add_task_form').reset();
-    $.each($('.added'), function(i, obj) {
-        if ($(obj).find("input")[0].value === "") {
-            obj.remove();
-        }
-    });
-});
-
 // Clear the DOM whenever a modal is dismissed
-$('#displayTaskModal').on('hidden.bs.modal',function(e){
-    $('#display-task-modal-content').html("")
-});
-
-$('#updateTaskModal, #addTaskModal, #cloneTaskModal').on('hidden.bs.modal',function(e){
-    $($(this).find('.modal-body')).html("")
+$('#displayTaskModal, #addTaskModal, #updateTaskModal, #cloneTaskModal').on('hidden.bs.modal',function(e){
+    $($(this).find('.modal-content')).html("")
 });
 
 // Auto expand description box
@@ -146,62 +132,14 @@ function show_state(state) {
 }
 
 function addTaskModal(id) {
-    $('#add-task-modal-body').load("new_task_form", function(result) {
+    $('#add-task-modal-content').load("new_task_form", function(result) {
         $('#addTaskModal').modal('show');
-        
-        $('[data-toggle="tooltip"]').tooltip();
-        $('#add-dep').pillbox();
-
-        // Add type ahead for dependencies and search box
-        $('#find-dep .typeahead').typeahead({
-            hint: false,
-            highlight: true,
-            minLength: 1
-        },
-        {
-            name: 'tasks',
-            source: findTasks()
-        });
-
-        $("#add-task-modal-body").off('click').on('click', '.add-more', function(e) {
-            e.preventDefault();
-            add_more_handler(this.id)
-        });
-        
-        $("#add-task-modal-body").on('click', '.remove-this', function(e) {
-            e.preventDefault();
-            $(this).parent().parent().remove();
-        });
     });
 }
 
 function updateTaskModal(id) {
-    $('#update-task-modal-body').load("update_task_form?id=" + id, function() {
+    $('#update-task-modal-content').load("update_task_form?id=" + id, function() {
         $('#updateTaskModal').modal('show');
-
-        $('[data-toggle="tooltip"]').tooltip();
-        $('#add-dep').pillbox();
-
-        // Add type ahead for dependencies and search box
-        $('#find-dep .typeahead').typeahead({
-            hint: false,
-            highlight: true,
-            minLength: 1
-        },
-        {
-            name: 'tasks',
-            source: findTasks()
-        });
-        
-        $("#update-task-modal-body").off('click').on('click', '.add-more', function(e) {
-            e.preventDefault();
-            add_more_handler(this.id)
-        });
-        
-        $("#update-task-modal-body").on('click', '.remove-this', function(e) {
-            e.preventDefault();
-            $(this).parent().parent().remove();
-        });
     });
 }
 
@@ -212,76 +150,7 @@ function displayTaskModal(id) {
 }
 
 function cloneTask(id) {
-    $('#clone-task-modal-body').load("update_task_form?id=" + id + "&clone=true", function() {
+    $('#clone-task-modal-content').load("update_task_form?id=" + id + "&clone=true", function() {
         $('#cloneTaskModal').modal('show');
-        
-        $('[data-toggle="tooltip"]').tooltip();
-        $('#add-dep').pillbox();
-
-        // Add type ahead for dependencies and search box
-        $('#find-dep .typeahead').typeahead({
-            hint: false,
-            highlight: true,
-            minLength: 1
-        },
-        {
-            name: 'tasks',
-            source: findTasks()
-        });
-        
-        $("#clone-task-modal-body").off('click').on('click', '.add-more', function(e) {
-            e.preventDefault();
-            add_more_handler(this.id)
-        });
-        
-        $("#clone-task-modal-body").on('click', '.remove-this', function(e) {
-            e.preventDefault();
-            $(this).parent().parent().remove();
-        });
     });
-}
-
-// Try to add or update a Task definition
-function addTask() {
-    form = $("#add_task_form").serialize()
-      
-    form += "&rsrt=" + $('#rsrt')[0].checked
-    
-    $('.env').each(function(i, obj) {
-        if ($(obj).find("input")[0].value !== "") {
-            form += "&env=" + $(obj).find("input")[0].value + "=" + $(obj).find("input")[1].value;
-        }
-    });
-    
-    $('.dvl').each(function(i, obj) {
-        if ($(obj).find("input")[0].value !== "" && $(obj).find("input")[1] !== "") {
-            form += "&dvl=" + $(obj).find("input")[0].value + ":" + $(obj).find("input")[1].value;
-        }
-    });
-    
-    $.each($('#add-dep').pillbox('items'), function(i, dep) {
-        form += "&dep=" + dep.value;
-    });
-    
-    xhttp = new XMLHttpRequest();
-    xhttp.open("GET", "add_task?" + form, true);
-    xhttp.send();
-}
-
-function disableTask(id) {
-    xhttp = new XMLHttpRequest();
-    xhttp.open("GET", "disable_task?id="+id, true);
-    xhttp.send();
-}
-
-function stopTask(id) {
-    xhttp = new XMLHttpRequest();
-    xhttp.open("GET", "stop_task?id="+id, true);
-    xhttp.send();
-}
-
-function misfireTask(id) {
-    xhttp = new XMLHttpRequest();
-    xhttp.open("GET", "queue_task?id="+id, true);
-    xhttp.send();
 }
