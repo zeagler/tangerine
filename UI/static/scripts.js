@@ -97,20 +97,25 @@ $(document)
 function loadTasks() {
     $.get('get_tasks', function(data) {
         $tasks = JSON.parse(data);
-        updated = "";
-        for (var i = 0; i < $tasks.length; i++) {
-            if ($tasks[i].state == "disabled" || $tasks[i].state == "disabling") continue
+        
+        if ($tasks.redirect) {
+            window.location.href = $tasks.redirect;
+        } else {
+            updated = "";
+            for (var i = 0; i < $tasks.length; i++) {
+                if ($tasks[i].state == "disabled" || $tasks[i].state == "disabling") continue
 
-            updated +=
-            '<button id="task" type="button" ' +
-                     'class="'+button_map[$tasks[i].state]+' d-inline-block"' +
-                     'onclick="displayTaskModal(\''+$tasks[i].id+'\')' +
-            '">' + 
-                '<p>'+$tasks[i].name+'</p>' +
-            '</button>';
+                updated +=
+                '<button id="task" type="button" ' +
+                        'class="'+button_map[$tasks[i].state]+' d-inline-block"' +
+                        'onclick="displayTaskModal(\''+$tasks[i].id+'\')' +
+                '">' + 
+                    '<p>'+$tasks[i].name+'</p>' +
+                '</button>';
+            }
+            $('#tasks').html(updated)
+            show_state($(".active")[1].textContent)
         }
-        $('#tasks').html(updated)
-        show_state($(".active")[1].textContent)
     });
 }
 

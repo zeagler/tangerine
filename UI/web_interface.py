@@ -10,6 +10,7 @@ import cherrypy
 from hashlib import sha256
 from settings import Web as options
 from API import API
+from time import time
 
 from mako.template import Template
 from mako.lookup import TemplateLookup
@@ -19,36 +20,22 @@ class Statuspage(object):
     """Render for the web application"""
 
     @cherrypy.expose
-    def index(self, code=None):
-        # Redirect HTTP to HTTPS
-        if cherrypy.request.scheme == "http":
-            redirect_url = cherrypy.request.base
-            redirect_url = redirect_url.replace(":" + str(cherrypy.request.local.port), "")
-            redirect_url = redirect_url.replace("http:", "https:")
-            raise cherrypy.HTTPRedirect(redirect_url)
+    def index(self):
+        """Main page for Tangerine's web UI"""
+        tmpl = lookup.get_template("index.html.mako")
+        return tmpl.render(
+                            username = cherrypy.session['username'],
+                            userimageurl = cherrypy.session['userimageurl'],
+                            usertype = cherrypy.session['usertype']
+                          )
 
-        # if this session is already authorized give the user the main page
+    @cherrypy.expose
+    def login(self, code=None):
+        # if the session is already authorized send the user to the main page
         if cherrypy.session.get("authorized", None):
-            # if this doesn't match the original request force a new session
-            agent = cherrypy.request.headers['User-Agent']
-            
-            if cherrypy.session["_ident"] == sha256(agent).hexdigest():
-                tmpl = lookup.get_template("index.html.mako")
-                return tmpl.render(
-                                   username = cherrypy.session['username'],
-                                   userimageurl = cherrypy.session['userimageurl'],
-                                   usertype = cherrypy.session['usertype']
-                                  )
-            
-            # Kill the current session
-            else:
-                cherrypy.session.clear()
-                cherrypy.session.delete()
-                cherrypy.lib.sessions.expire()
-                raise cherrypy.HTTPRedirect("/")
+            raise cherrypy.HTTPRedirect("/")
 
         # if the `code` parameter was POSTed, try to authenticate the user
-        #elif code:
         if code:
             # First check that the code is valid
             # Query GitHub for an access token for the code
@@ -88,6 +75,9 @@ class Statuspage(object):
                         agent = cherrypy.request.headers['User-Agent']
                         # remote_ip = cherrypy.request.remote.ip
                         cherrypy.session["_ident"] = sha256(agent).hexdigest()
+                        
+                        # Set the expiration time
+                        cherrypy.session['expires'] = int(time()) + 1800 # 30 minutes from now
 
                         # Regenerate the session ID on successful login
                         cherrypy.session.regenerate()
@@ -100,197 +90,79 @@ class Statuspage(object):
                         cherrypy.session["userimageurl"] = data['avatar_url']
                         
                         # Send the authorized user to the main page or previous request
+                        cherrypy.session["login_msg"] = None
                         redirect = cherrypy.session.get("redirect", "/")
-                        if redirect == "/get_tasks":
-                            redirect = "/"
                         raise cherrypy.HTTPRedirect(redirect)
                     
                     else:
+                        cherrypy.session["login_msg"] = "Login failed."
                         return "Login failed. User '" + data['login'] + "' is not authorized"
                         
                 # The user is not authorized
                 else:
+                    cherrypy.session["login_msg"] = "Login failed."
                     return "Login failed. User '" + data['login'] + "' is not authorized"
 
             # The code was not valid or not sent by GitHub
             else:
+                cherrypy.session["login_msg"] = "Login failed."
                 return "Login failed"
 
+            cherrypy.session["login_msg"] = "Login failed."
             return "There was an error: " + str(response)
-
-        else:
-            raise cherrypy.HTTPRedirect("login")
-
-    @cherrypy.expose
-    def login(self):
-        # Redirect HTTP to HTTPS
-        if cherrypy.request.scheme == "http":
-            redirect_url = cherrypy.request.base
-            redirect_url = redirect_url.replace(":" + str(cherrypy.request.local.port), "")
-            redirect_url = redirect_url.replace("http:", "https:")
-            raise cherrypy.HTTPRedirect(redirect_url)
-
-        # if the session is already authorized send the user to the main page
-        if cherrypy.session.get("authorized", None):
-            raise cherrypy.HTTPRedirect("/")
-          
+        
         # Regenerate the session ID before logging in
         cherrypy.session.regenerate()
         tmpl = lookup.get_template("login.html.mako")
-        return tmpl.render(client_id = options['GITHUB_OAUTH_ID'])
+        return tmpl.render(
+                            client_id = options['GITHUB_OAUTH_ID'],
+                            msg = cherrypy.session.get("login_msg", None)
+                           )
 
     @cherrypy.expose
     def history(self):
-        # Redirect HTTP to HTTPS
-        if cherrypy.request.scheme == "http":
-            redirect_url = cherrypy.request.base
-            redirect_url = redirect_url.replace(":" + str(cherrypy.request.local.port), "")
-            redirect_url = redirect_url.replace("http:", "https:")
-            raise cherrypy.HTTPRedirect(redirect_url)
-
-        # if the session is not authorized send the user to the login page
-        if not cherrypy.session.get("authorized", None):
-            cherrypy.session["redirect"] = cherrypy.request.wsgi_environ['REQUEST_URI']
-            raise cherrypy.HTTPRedirect("/")
-        
-        else:
-            agent = cherrypy.request.headers['User-Agent']
-            
-            # if this doesn't match the original request force a new session
-            if cherrypy.session["_ident"] == sha256(agent).hexdigest():
-                tmpl = lookup.get_template("history.html.mako")
-                return tmpl.render(
-                                    username = cherrypy.session['username'],
-                                    userimageurl = cherrypy.session['userimageurl'],
-                                    usertype = cherrypy.session['usertype']
-                                  )
-            
-            # Kill the current session
-            else:
-                cherrypy.session.clear()
-                cherrypy.session.delete()
-                cherrypy.lib.sessions.expire()
-                raise cherrypy.HTTPRedirect("/")
+        tmpl = lookup.get_template("history.html.mako")
+        return tmpl.render(
+                            username = cherrypy.session['username'],
+                            userimageurl = cherrypy.session['userimageurl'],
+                            usertype = cherrypy.session['usertype']
+                          )
               
     @cherrypy.expose
     def get_runs(self, _=None):
-        # Redirect HTTP to HTTPS
-        if cherrypy.request.scheme == "http":
-            redirect_url = cherrypy.request.base
-            redirect_url = redirect_url.replace(":" + str(cherrypy.request.local.port), "")
-            redirect_url = redirect_url.replace("http:", "https:")
-            raise cherrypy.HTTPRedirect(redirect_url)
-
-        # if the session is not authorized send the user to the login page
-        if not cherrypy.session.get("authorized", None):
-            raise cherrypy.HTTPRedirect("/")
-        
-        else:
-            agent = cherrypy.request.headers['User-Agent']
-            
-            # if this doesn't match the original request force a new session
-            if cherrypy.session["_ident"] == sha256(agent).hexdigest():
-                return API.get_runs()
-            
-            # Kill the current session
-            else:
-                cherrypy.session.clear()
-                cherrypy.session.delete()
-                cherrypy.lib.sessions.expire()
-                raise cherrypy.HTTPRedirect("/")
+        return API.get_runs()
 
     @cherrypy.expose
     def logout(self):
-        # Redirect HTTP to HTTPS
-        if cherrypy.request.scheme == "http":
-            redirect_url = cherrypy.request.base
-            redirect_url = redirect_url.replace(":" + str(cherrypy.request.local.port), "")
-            redirect_url = redirect_url.replace("http:", "https:")
-            raise cherrypy.HTTPRedirect(redirect_url)
-
         # Kill the current session
         cherrypy.session.clear()
         cherrypy.session.delete()
         cherrypy.lib.sessions.expire()
-        raise cherrypy.HTTPRedirect("/")
+        cherrypy.session["login_msg"] = "Logged out"
+        raise cherrypy.HTTPRedirect("/login")
     
     @cherrypy.expose
     def update_task_form(self, id=None, clone=False):
-        # Redirect HTTP to HTTPS
-        if cherrypy.request.scheme == "http":
-            redirect_url = cherrypy.request.base
-            redirect_url = redirect_url.replace(":" + str(cherrypy.request.local.port), "")
-            redirect_url = redirect_url.replace("http:", "https:")
-            raise cherrypy.HTTPRedirect(redirect_url)
-          
-        # if the session isn't authorized send the user to the login
-        if not cherrypy.session.get("authorized", None):
-            raise cherrypy.HTTPRedirect("/")
-        
         tmpl = lookup.get_template("update_task.html.mako")
         return tmpl.render(task = API.get_task_object(id), clone=clone)
       
     @cherrypy.expose
     def new_task_form(self, id=None):
-        # Redirect HTTP to HTTPS
-        if cherrypy.request.scheme == "http":
-            redirect_url = cherrypy.request.base
-            redirect_url = redirect_url.replace(":" + str(cherrypy.request.local.port), "")
-            redirect_url = redirect_url.replace("http:", "https:")
-            raise cherrypy.HTTPRedirect(redirect_url)
-          
-        # if the session isn't authorized send the user to the login
-        if not cherrypy.session.get("authorized", None):
-            raise cherrypy.HTTPRedirect("/")
-        
         tmpl = lookup.get_template("new_task.html.mako")
         return tmpl.render()
       
     @cherrypy.expose
     def add_task_form(self):
-        # Redirect HTTP to HTTPS
-        if cherrypy.request.scheme == "http":
-            redirect_url = cherrypy.request.base
-            redirect_url = redirect_url.replace(":" + str(cherrypy.request.local.port), "")
-            redirect_url = redirect_url.replace("http:", "https:")
-            raise cherrypy.HTTPRedirect(redirect_url)
-          
-        # if the session isn't authorized send the user to the login
-        if not cherrypy.session.get("authorized", None):
-            raise cherrypy.HTTPRedirect("/")
-        
         tmpl = lookup.get_template("new_task.html.mako")
         return tmpl.render()
 
     @cherrypy.expose
     def display_task(self, id=None):
-        # Redirect HTTP to HTTPS
-        if cherrypy.request.scheme == "http":
-            redirect_url = cherrypy.request.base
-            redirect_url = redirect_url.replace(":" + str(cherrypy.request.local.port), "")
-            redirect_url = redirect_url.replace("http:", "https:")
-            raise cherrypy.HTTPRedirect(redirect_url)
-          
-        # if the session isn't authorized send the user to the login
-        if not cherrypy.session.get("authorized", None):
-            raise cherrypy.HTTPRedirect("/")
-        
         tmpl = lookup.get_template("display_task.html.mako")
         return tmpl.render(task = API.get_task_object(id))
 
     @cherrypy.expose
     def display_run(self, id=None):
-        # Redirect HTTP to HTTPS
-        if cherrypy.request.scheme == "http":
-            redirect_url = cherrypy.request.base
-            redirect_url = redirect_url.replace(":" + str(cherrypy.request.local.port), "")
-            redirect_url = redirect_url.replace("http:", "https:")
-            raise cherrypy.HTTPRedirect(redirect_url)
-          
-        # if the session isn't authorized send the user to the login
-        if not cherrypy.session.get("authorized", None):
-            raise cherrypy.HTTPRedirect("/")
-        
         tmpl = lookup.get_template("display_run.html.mako")
         return tmpl.render(run = API.get_run_object(id))
     
@@ -299,19 +171,7 @@ class Statuspage(object):
     def add_task(self, id=None, name=None, state=None, dep=None, image=None, cmd=None,
                 etp=None, cron=None, rsrt=None, rec=None, mxf=None, idl=None,
                 daf=None, env=None, dvl=None, prt=None, desc=None):
-      
-        # Redirect HTTP to HTTPS
-        if cherrypy.request.scheme == "http":
-            redirect_url = cherrypy.request.base
-            redirect_url = redirect_url.replace(":" + str(cherrypy.request.local.port), "")
-            redirect_url = redirect_url.replace("http:", "https:")
-            raise cherrypy.HTTPRedirect(redirect_url)
-          
-        # if the session isn't authorized send the user to the login
-        if not cherrypy.session.get("authorized", None):
-            cherrypy.session["redirect"] = cherrypy.request.wsgi_environ['REQUEST_URI']
-            raise cherrypy.HTTPRedirect("/")
-        
+        """ """
         if id:
             return API.update_task(id=id, name=name, state=state, dep=dep, image=image, cmd=cmd, etp=etp,
                                   cron=cron, rsrt=rsrt, rec=rec, mxf=mxf, idl=idl, daf=daf,
@@ -323,47 +183,18 @@ class Statuspage(object):
 
     @cherrypy.expose
     def get_task(self, id=None):
-        # Redirect HTTP to HTTPS
-        if cherrypy.request.scheme == "http":
-            redirect_url = cherrypy.request.base
-            redirect_url = redirect_url.replace(":" + str(cherrypy.request.local.port), "")
-            redirect_url = redirect_url.replace("http:", "https:")
-            raise cherrypy.HTTPRedirect(redirect_url)
-          
-        # if the session isn't authorized send the user to the login
-        if not cherrypy.session.get("authorized", None):
-            raise cherrypy.HTTPRedirect("/")
-        
         return API.get_task(id)
       
     @cherrypy.expose
     def get_tasks(self):
-        # Redirect HTTP to HTTPS
-        if cherrypy.request.scheme == "http":
-            redirect_url = cherrypy.request.base
-            redirect_url = redirect_url.replace(":" + str(cherrypy.request.local.port), "")
-            redirect_url = redirect_url.replace("http:", "https:")
-            raise cherrypy.HTTPRedirect(redirect_url)
+        if cherrypy.session.get("login_msg", None) == "AJAX not authorized":
+            return '{"redirect": "/login"}'
           
-        # if the session isn't authorized send the user to the login
-        if not cherrypy.session.get("authorized", None):
-            raise cherrypy.HTTPRedirect("/")
-        
         return API.get_tasks()
 
     @cherrypy.expose
     def get_users(self, username=None, userid=None, usertype=None):
-        # Redirect HTTP to HTTPS
-        if cherrypy.request.scheme == "http":
-            redirect_url = cherrypy.request.base
-            redirect_url = redirect_url.replace(":" + str(cherrypy.request.local.port), "")
-            redirect_url = redirect_url.replace("http:", "https:")
-            raise cherrypy.HTTPRedirect(redirect_url)
-          
-        # if the session isn't authorized send the user to the login
-        if not cherrypy.session.get("authorized", None):
-            raise cherrypy.HTTPRedirect("/")
-          
+        # Check if the user is an admin
         if cherrypy.session.get("usertype", "user") == "admin":
             users = API.get_users(username, userid, usertype)
             if users:
@@ -375,47 +206,14 @@ class Statuspage(object):
 
     @cherrypy.expose
     def disable_task(self, id):
-        # Redirect HTTP to HTTPS
-        if cherrypy.request.scheme == "http":
-            redirect_url = cherrypy.request.base
-            redirect_url = redirect_url.replace(":" + str(cherrypy.request.local.port), "")
-            redirect_url = redirect_url.replace("http:", "https:")
-            raise cherrypy.HTTPRedirect(redirect_url)
-          
-        # if the session isn't authorized send the user to the login
-        if not cherrypy.session.get("authorized", None):
-            raise cherrypy.HTTPRedirect("/")
-        
         return API.disable_task(id)
       
     @cherrypy.expose
     def stop_task(self, id):
-        # Redirect HTTP to HTTPS
-        if cherrypy.request.scheme == "http":
-            redirect_url = cherrypy.request.base
-            redirect_url = redirect_url.replace(":" + str(cherrypy.request.local.port), "")
-            redirect_url = redirect_url.replace("http:", "https:")
-            raise cherrypy.HTTPRedirect(redirect_url)
-          
-        # if the session isn't authorized send the user to the login
-        if not cherrypy.session.get("authorized", None):
-            raise cherrypy.HTTPRedirect("/")
-        
         return API.stop_task(id)
       
     @cherrypy.expose
     def queue_task(self, id, username):
-        # Redirect HTTP to HTTPS
-        if cherrypy.request.scheme == "http":
-            redirect_url = cherrypy.request.base
-            redirect_url = redirect_url.replace(":" + str(cherrypy.request.local.port), "")
-            redirect_url = redirect_url.replace("http:", "https:")
-            raise cherrypy.HTTPRedirect(redirect_url)
-          
-        # if the session isn't authorized send the user to the login
-        if not cherrypy.session.get("authorized", None):
-            raise cherrypy.HTTPRedirect("/")
-        
         return API.queue_task(id, username)
       
 def secureheaders():
@@ -425,6 +223,72 @@ def secureheaders():
     headers['Content-Security-Policy'] = "default-src='self'"
     headers['Strict-Transport-Security'] = 'max-age=31536000' # one year
 
+def redirect_to_ssl():
+    """ """
+    redirect_url = cherrypy.request.base
+    redirect_url = redirect_url.replace(":" + str(cherrypy.request.local.port), "")
+    redirect_url = redirect_url.replace("http:", "https:")
+    raise cherrypy.HTTPRedirect(redirect_url)
+          
+def authenticate():
+    """
+    If the session isn't authorized this will send the user to the login page
+    If the user agent for the session has changed this will invalidate the session
+    TODO: If the session is expired destroy it and return the user to the login page
+    """
+    
+    path = cherrypy.request.path_info
+    
+    # Don't redirect if the user is going to the login page
+    if (path == "/login"):
+        print "Don't redirect"
+        return
+
+    # Check if the session is authorized
+    if not cherrypy.session.get("authorized", None):
+        # Recurring AJAX requests should send back a redirect signal
+        if (path == "/get_tasks"):
+            cherrypy.session["login_msg"] = "AJAX not authorized"
+            return
+      
+        # Record the request to return the user to upon authentication
+        if path in ["/history", "/add_task"]:
+            cherrypy.session["redirect"] = cherrypy.request.wsgi_environ['REQUEST_URI']
+        else:
+            cherrypy.session["redirect"] = "/"
+         
+        # Redirect the user to the login page
+        print "Session not authorized"
+        cherrypy.session["login_msg"] = "Session not authorized"
+        raise cherrypy.HTTPRedirect("login")
+   
+    # if this doesn't match the original request force a new session
+    useragent = cherrypy.request.headers['User-Agent']
+    
+    if not cherrypy.session["_ident"] == sha256(useragent).hexdigest():
+        cherrypy.session.clear()
+        cherrypy.session.delete()
+        cherrypy.lib.sessions.expire()
+        cherrypy.session["login_msg"] = "User Agent has changed"
+        print "User Agent has changed"
+        raise cherrypy.HTTPRedirect("login")
+      
+    # Check if the session has expired, if is not extend the session
+    now = int(time())
+    if cherrypy.session['expires'] >= now:
+        # Don't extend the session for recurring AJAX requests
+        if not path == "/get_tasks":
+            cherrypy.session['expires'] = now + 1800 # 30 minutes from now
+    else:
+        # destroy the session if it is expired
+        cherrypy.session.clear()
+        cherrypy.session.delete()
+        cherrypy.lib.sessions.expire()
+        cherrypy.session["login_msg"] = "Session Expired"
+        print "Session Expired"
+        raise cherrypy.HTTPRedirect("login")
+        
+    
 def start_web_interface(pg):
     """
     Start the server
@@ -443,9 +307,11 @@ def start_web_interface(pg):
     #}
     
     # Set the global config.
+    cherrypy.tools.authenticate = cherrypy.Tool('before_handler', authenticate)
     cherrypy.tools.secureheaders = cherrypy.Tool('before_finalize', secureheaders, priority=60)
     cherrypy.config.update({
                             #'environment': 'production',
+                            'tools.authenticate.on': True,
                             'tools.sessions.on': True,
                             'engine.autoreload.on': False,
                             'tools.sessions.timeout': 45,
@@ -459,7 +325,7 @@ def start_web_interface(pg):
                             'server.ssl_private_key': options['SSL_PRIVATE_KEY'],
                             'server.ssl_certificate_chain': options['SSL_CERTIFICATE_CHAIN'],
                            })
-    
+
     #cherrypy.tree.mount(Statuspage(), config=conf) # for static files without Nginx
     cherrypy.tree.mount(Statuspage())
 

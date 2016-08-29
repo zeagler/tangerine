@@ -5,7 +5,11 @@
         <link rel="stylesheet" type="text/css" href="static/style.css">
         <link rel="shortcut icon" type="image/x-icon" href="static/favicon.ico" />
 
-        <script src="https://code.jquery.com/jquery-3.0.0.min.js"></script>
+        <script src="https://code.jquery.com/jquery-2.2.4.min.js"></script>
+
+        <!-- jQuery datatables -->
+        <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/v/bs-3.3.6/dt-1.10.12/b-1.2.2/r-2.1.0/sc-1.4.2/datatables.min.css"/> 
+        <script type="text/javascript" src="https://cdn.datatables.net/v/bs-3.3.6/dt-1.10.12/b-1.2.2/r-2.1.0/sc-1.4.2/datatables.min.js"></script>
 
         <!-- Patternfly -->
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/patternfly/3.8.1/css/patternfly.min.css">
@@ -20,7 +24,6 @@
         <link href="https://www.fuelcdn.com/fuelux/3.13.0/css/fuelux.min.css" rel="stylesheet">
         <script src="https://www.fuelcdn.com/fuelux/3.13.0/js/fuelux.min.js"></script>
 
-        
         <!-- Typeahead -->
         <script src="https://twitter.github.io/typeahead.js/releases/latest/typeahead.bundle.js"></script>
 
