@@ -2,7 +2,16 @@ Amazon:
   ENABLED: True
   EC2_SCALE_LIMIT: 20
   SPOT_FLEET_REQUEST_ID: sfr-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
-  
+
+Docker:
+  log_directory: "/logs"
+  registry: {
+    name: quay
+    username: my_pull_bot
+    password: my_password
+    url: https://quay.io/
+  }
+
 # Leave PGPASS is blank if you are using a pgpass file
 Postgresql:
   PGHOST: localhost

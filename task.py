@@ -177,7 +177,7 @@ class Task(object):
         """Go through the process to mark a task as starting"""
         self.update("state", "starting")
 
-    def running(self, run_id):
+    def running(self, run_id, agent_id):
         """
         Go through the process to mark a task as running
         Create an entry in the task_history table
@@ -188,7 +188,7 @@ class Task(object):
         self.update("state", "running")
         
         # Log the run in the history table
-        self.create_run(run_id)
+        self.create_run(run_id, agent_id)
 
     def success(self):
         """Go through the process to mark a task as success"""
@@ -279,13 +279,13 @@ class Task(object):
             self.update("state", "disabled")
             self.update("disabled_time", int(time()))
             
-    def create_run(self, run_id):
+    def create_run(self, run_id, agent_id):
         global postgres
 
         query = "INSERT INTO task_history (" + \
                 "run_id, task_id, name, description, dependencies, dependencies_str, command, entrypoint" + \
                 ", recoverable_exitcodes, restartable, datavolumes" + \
-                ", environment, imageuuid, cron, queued_by, run_start_time, run_start_time_str" + \
+                ", environment, imageuuid, cron, queued_by, agent_id, run_start_time, run_start_time_str, log" + \
                 ") VALUES (" + \
                 str(run_id) + \
                 ", " + str(self.id) + \
@@ -302,8 +302,10 @@ class Task(object):
                 "', '" + self.imageuuid + \
                 "', '" + self.cron + \
                 "', '" + self.queued_by + \
+                "', '" + str(agent_id) + \
                 "', '" + str(self.last_run_time) + \
                 "', '" + datetime.fromtimestamp(self.last_run_time).strftime('%I:%M%p %B %d, %Y') + \
+                "', '" + self.name + "-" + str(run_id) + ".log" + \
                 "');"
 
         cur = postgres.conn.cursor()

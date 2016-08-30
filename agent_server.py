@@ -17,6 +17,7 @@ from postgres_connection import close_connections
 from rancher_functions import Rancher
 from slack_functions import Slack
 from UI.agent_web import start_agent_web
+from settings import Agent as options
 
 from requests.exceptions import ReadTimeout
 
@@ -39,7 +40,7 @@ def start_task(task):
     container = docker.start_task(task, run_id)
     if container:
         print "Run #" + str(run_id) + " for task '" + task.name + "' has started running"
-        task.running(run_id)
+        task.running(run_id, agent.agent_id)
         run = postgres.get_run(run_id)
         if monitor_task(container, run) == "stopped":
             return
@@ -56,8 +57,11 @@ def monitor_task(container, run):
     # wait until the container is finished, keep a record of docker stats
     # check that the user has not requested a stop
     
-    while not docker.container_status(container['Id']) == "exited":
+    while True:
         try:
+            if docker.container_status(container['Id']) == "exited":
+                break
+          
             if check_halting(run, container) == "stopped":
                 run.finish("stopped")
                 return "stopped"
@@ -79,7 +83,7 @@ def monitor_task(container, run):
         exit_code = 1
     
     run.finish(exit_code)
-    
+  
     return exit_code
 
 def check_exitcode(run):
@@ -149,17 +153,30 @@ def add_agent():
     if not agent_id:
         print "Could not reserve an agent id"
         return
-
-    postgres.add_agent(
-                      agent_id = agent_id,
-                      host_ip = urllib2.urlopen('http://169.254.169.254/latest/meta-data/local-ipv4').read(),
-                      agent_port = 443,
-                      instance_id = urllib2.urlopen('http://169.254.169.254/latest/meta-data/instance-id').read(),
-                      instance_type = urllib2.urlopen('http://169.254.169.254/latest/meta-data/instance-type').read(),
-                      available_memory = dict((i.split()[0].rstrip(':'),int(i.split()[1])) for i in open('/proc/meminfo').readlines())['MemTotal'],
-                      agent_creation_time = int(time()),
-                      agent_key = agent_key
-                    )
+      
+    if options['DEVELOPMENT']:
+        import socket
+        postgres.add_agent(
+                          agent_id = agent_id,
+                          host_ip = socket.gethostbyname(socket.gethostname()),
+                          agent_port = 443,
+                          instance_id = "i-123abc",
+                          instance_type = "foo.bar",
+                          available_memory = dict((i.split()[0].rstrip(':'),int(i.split()[1])) for i in open('/proc/meminfo').readlines())['MemTotal'],
+                          agent_creation_time = int(time()),
+                          agent_key = agent_key
+                        )
+    else:
+        postgres.add_agent(
+                          agent_id = agent_id,
+                          host_ip = urllib2.urlopen('http://169.254.169.254/latest/meta-data/local-ipv4').read(),
+                          agent_port = 443,
+                          instance_id = urllib2.urlopen('http://169.254.169.254/latest/meta-data/instance-id').read(),
+                          instance_type = urllib2.urlopen('http://169.254.169.254/latest/meta-data/instance-type').read(),
+                          available_memory = dict((i.split()[0].rstrip(':'),int(i.split()[1])) for i in open('/proc/meminfo').readlines())['MemTotal'],
+                          agent_creation_time = int(time()),
+                          agent_key = agent_key
+                        )
     
     return {"agent_key": agent_key, "agent_id": agent_id}
         
@@ -181,7 +198,7 @@ def agent_server():
 
     # Loop through the task queue
     while True:
-        id = postgres.pop_ready_queue()
+        id = postgres.pop_queue("ready_queue")
 
         if id:
             task = postgres.get_task(id)
@@ -192,7 +209,7 @@ def agent_server():
                     agent.update_run("")
                     
         else:
-            postgres.load_ready_queue()
+            postgres.load_queue("ready_queue")
             
             # Sleep between load and process
             sleep(3)

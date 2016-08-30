@@ -36,16 +36,21 @@
                     <div id="memory"></div>
                     <div id="cpu"></div>
                 </div>
-                <div class="tab-pane" id="log">
-                    <p>WIP</p>
+                <div class="tab-pane" id="log" style="width: 100%; height: 90%;">
+                    <button type="button" class="btn btn-default" style="margin-bottom: 5px" onclick="window.location = 'get_log?log_name=${run.log}&full_log=True';">
+                        Download Full Log
+                    </button>
+                    <div id="log_well" class="well" style="height: 85%; overflow-y: scroll; margin-bottom: 0px">
+                        ${log.replace("\n", "<br>")}
+                    </div>
                 </div>
             </div>
         </div>
 
         <div class="modal-footer">
-            <button type="button" class="btn btn-default" + data-dismiss="modal">Close</button>
+            <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
         </div>
-        
+
         <script>
             var memory = {
                 name: 'Memory',

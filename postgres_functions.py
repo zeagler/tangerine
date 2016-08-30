@@ -5,6 +5,7 @@ from task import Task
 from run import Run
 from user import User
 from postgres_connection import PGconnection
+from postgres_database import verify_database
 
 class Postgres():
     """
@@ -18,38 +19,11 @@ class Postgres():
         postgres = PGconnection()
         setattr(self, "conn", postgres.conn)
 
-        # Check if task table exists, create it if it does not
-        cur = self.conn.cursor()
-        cur.execute("select exists(select * from information_schema.tables where table_name='tangerine')")
-        if not cur.fetchone()[0]:
-            self.create_task_table()
-
-        # Check if the authorized user table exists, create it if it does not
-        cur.execute("select exists(select * from information_schema.tables where table_name='authorized_users')")
-        if not cur.fetchone()[0]:
-            self.create_user_table()
-
-        # Check if the shared task queue exists, create it if it does not
-        cur.execute("select exists(select * from information_schema.tables where table_name='task_queue')")
-        if not cur.fetchone()[0]:
-            self.create_task_queue()
-
-        # Check if the shared ready queue exists, create it if it does not
-        cur.execute("select exists(select * from information_schema.tables where table_name='ready_queue')")
-        if not cur.fetchone()[0]:
-            self.create_ready_queue()
-
-        # Check if the task history table exists, create it if it does not
-        cur.execute("select exists(select * from information_schema.tables where table_name='task_history')")
-        if not cur.fetchone()[0]:
-            self.create_task_history_table()
-
-        # Check if the agent table exists, create it if it does not
-        cur.execute("select exists(select * from information_schema.tables where table_name='agents')")
-        if not cur.fetchone()[0]:
-            self.create_agent_table()
+        verify_database(self.conn)
 
         # Get the column names        
+        cur = self.conn.cursor()
+
         cur.execute("select column_name from information_schema.columns where table_name='tangerine';")
         setattr(self, "columns", cur.fetchall())
         
@@ -271,88 +245,67 @@ class Postgres():
         task = Task(self.columns, cur.fetchone())
         task.stop()
     
-    def load_ready_queue(self):
-        """Load the task queue with the id of all the tasks in the task table"""
-        cur = self.conn.cursor()
-        cur.execute("LOCK TABLE ready_queue IN ACCESS EXCLUSIVE MODE;")
+    def load_queue(self, queue=None):
+        """
+        Load the queue with the id of all the tasks in the task table
         
-        cur.execute("SELECT COUNT(id) FROM ready_queue;")
+        Args:
+            queue: the queue to load. Valid queue are `task_queue` `ready_queue`
+        """
+        if not queue:
+            return False
+        elif queue == "ready_queue":
+            condition = " WHERE state='ready';"
+        else:
+            condition = ""
+        
+        cur = self.conn.cursor()
+        cur.execute("LOCK TABLE " + queue + " IN ACCESS EXCLUSIVE MODE;")
+        
+        cur.execute("SELECT COUNT(id) FROM " + queue + ";")
 
-        # if the task queue still has tasks return nothing
+        # if the queue still has tasks return nothing
         if cur.fetchone()[0]:
             self.conn.rollback()
         else:
-            cur.execute("SELECT COUNT(id) FROM tangerine WHERE state='ready';")
+            cur.execute("SELECT COUNT(id) FROM tangerine" + condition + ";")
 
             # If the task table is empty return nothing
             if not cur.fetchone()[0]:
                 self.conn.commit()
                 return
             
-            cur.execute("SELECT id FROM tangerine WHERE state='ready';")
+            cur.execute("SELECT id FROM tangerine" + condition + ";")
             ids = ("(" + str(id[0]) + ")" for id in cur.fetchall())
-            cur.execute("INSERT INTO ready_queue VALUES " + ", ".join(ids) + ";")
+            cur.execute("INSERT INTO " + queue + " VALUES " + ", ".join(ids) + ";")
             self.conn.commit()
     
-    def load_task_queue(self):
-        """Load the task queue with the id of all the tasks in the task table"""
-        cur = self.conn.cursor()
-        cur.execute("LOCK TABLE task_queue IN ACCESS EXCLUSIVE MODE;")
+    def pop_queue(self, queue=None):
+        """
+        Pop the first task id from a queue
         
-        cur.execute("SELECT COUNT(id) FROM task_queue;")
-
-        # if the task queue still has tasks return nothing
-        if cur.fetchone()[0]:
-            self.conn.rollback()
-        else:
-            cur.execute("SELECT COUNT(id) FROM tangerine;")
-
-            # If the task table is empty return nothing
-            if not cur.fetchone()[0]:
-                self.conn.commit()
-                return
-            
-            cur.execute("SELECT id FROM tangerine;")
-            ids = ("(" + str(id[0]) + ")" for id in cur.fetchall())
-            cur.execute("INSERT INTO task_queue VALUES " + ", ".join(ids) + ";")
-            self.conn.commit()
+        Args:
+            queue: The queue to pop. Valid queues are `task_queue` `ready_queue`
+        """
+        if not queue:
+            return False
         
-    def pop_task_queue(self):
-        """Pop the first task id from the processing queue"""
         cur = self.conn.cursor()
-        cur.execute("LOCK TABLE task_queue IN ACCESS EXCLUSIVE MODE;")
+        cur.execute("LOCK TABLE " + queue + " IN ACCESS EXCLUSIVE MODE;")
 
-        cur.execute("SELECT id FROM task_queue LIMIT 1;")
+        cur.execute("SELECT id FROM " + queue + " LIMIT 1;")
         row = cur.fetchone()
+        self.conn.commit()
      
         if row:
-            id = row[0]
-            cur.execute("DELETE FROM task_queue WHERE id='"+str(id)+"';")
+            cur.execute("DELETE FROM " + queue + " WHERE id='"+str(row[0])+"';")
+            return row[0]
         else:
-            id = False
+            return False
 
-        self.conn.commit()
-        
-        return id
-        
-    def pop_ready_queue(self):
-        """Pop the first task id from the ready queue"""
-        cur = self.conn.cursor()
-        cur.execute("LOCK TABLE ready_queue IN ACCESS EXCLUSIVE MODE;")
-
-        cur.execute("SELECT id FROM ready_queue LIMIT 1;")
-        row = cur.fetchone()
-     
-        if row:
-            id = row[0]
-            cur.execute("DELETE FROM ready_queue WHERE id='"+str(id)+"';")
-        else:
-            id = False
-
-        self.conn.commit()
-        
-        return id
-      
+    #
+    # Runs
+    #
     def get_run(self, id):
         """Get the information of a run"""
         if not id:
@@ -393,17 +346,9 @@ class Postgres():
         cur.execute(query)
         self.conn.commit()
         return cur.fetchone()[0]
-
-    def reserve_next_agent_id(self):
-        """Get the next valid agent id"""
-        query = "SELECT NEXTVAL(pg_get_serial_sequence('agents', 'agent_id'))"
-        cur = self.conn.cursor()
-        cur.execute(query)
-        self.conn.commit()
-        return cur.fetchone()[0]
       
     #
-    # Begin tangerine administration queries
+    # Users
     #
     def get_users(self, column=None, value=None):
         """
@@ -424,6 +369,17 @@ class Postgres():
         cur.execute(query+";")
         self.conn.commit()
         return [User(self.user_columns, user) for user in cur.fetchall()]
+    
+    #
+    # Agents
+    #
+    def reserve_next_agent_id(self):
+        """Get the next valid agent id"""
+        query = "SELECT NEXTVAL(pg_get_serial_sequence('agents', 'agent_id'))"
+        cur = self.conn.cursor()
+        cur.execute(query)
+        self.conn.commit()
+        return cur.fetchone()[0]
     
     def add_agent(self, agent_id, host_ip, agent_port, instance_id,
                   instance_type, available_memory, agent_creation_time, agent_key):
@@ -450,6 +406,11 @@ class Postgres():
     
     def get_agents(self, state=None, agent_id=None):
         """
+        Return the information of agents matching the arguments
+        
+        Args:
+            state: The state of the agent. Valid states are `active` `inactive` `bad_state`
+            agent_id: The id of the agent, this will return only one agent.
         """
         query = "SELECT * FROM agents"
       
@@ -467,151 +428,3 @@ class Postgres():
                 return response.fetchall()
         else:
             return False
-    
-    #
-    # Create tables
-    # TODO: functions to modify table columns when needed
-    #
-    def create_task_table(self):
-        """Create the table to track tasks"""
-        cur = self.conn.cursor()
-        cur.execute("""
-        CREATE TABLE tangerine (
-            id                       serial        PRIMARY KEY,
-            name                     varchar(100)  NOT NULL UNIQUE,
-            description              varchar,
-            state                    varchar(10)   NOT NULL DEFAULT 'queued',
-            next_state               varchar(10),
-            dependencies             varchar[]     NOT NULL DEFAULT '{}',
-            command                  varchar       NOT NULL DEFAULT '',
-            entrypoint               varchar       NOT NULL DEFAULT '',
-            recoverable_exitcodes    integer[]     NOT NULL DEFAULT '{}',
-            restartable              boolean       NOT NULL DEFAULT true,
-            datavolumes              varchar[]     NOT NULL DEFAULT '{}',
-            environment              varchar[][2]  NOT NULL DEFAULT '{}',
-            imageuuid                varchar       NOT NULL,
-            cron                     varchar(100)  NOT NULL DEFAULT '',
-            next_run_time            integer,
-            last_run_time            integer,
-            last_success_time        integer,
-            last_fail_time           integer,
-            creation_time            integer,
-            last_modified_time       integer,
-            failures                 integer       NOT NULL DEFAULT 0,
-            max_failures             integer       NOT NULL DEFAULT 3,
-            queued_by                varchar       NOT NULL DEFAULT '',
-            service_id               varchar(10)   NOT NULL DEFAULT '',
-            run_id                   integer,
-            count                    integer       NOT NULL DEFAULT 0,
-            delay                    integer       NOT NULL DEFAULT 0,
-            reschedule_delay         integer       NOT NULL DEFAULT 5,
-            disabled_time            integer
-        );""")
-        self.conn.commit()
-    
-    def create_user_table(self):
-        """Create the table to store authorized users"""
-        cur = self.conn.cursor()
-        cur.execute("""
-        CREATE TABLE authorized_users (
-            userid    integer       PRIMARY KEY,
-            username  varchar(100)  NOT NULL UNIQUE,
-            usertype  varchar(10)   NOT NULL DEFAULT 'user'
-        );""")
-        self.conn.commit()
-
-    def create_task_queue(self):
-        """Create the table to be used as a queue for tangerine in HA"""
-        cur = self.conn.cursor()
-        cur.execute("""
-        CREATE TABLE task_queue (
-            id integer
-        );""")
-        self.conn.commit()
-
-    def create_ready_queue(self):
-        """Create the table to be used as a queue for tangerine in HA"""
-        cur = self.conn.cursor()
-        cur.execute("""
-        CREATE TABLE ready_queue (
-            id integer
-        );""")
-        self.conn.commit()
-        
-    def create_task_history_table(self):
-        """Create the table to store task run history"""
-        cur = self.conn.cursor()
-        cur.execute("""
-        CREATE TABLE task_history (
-            run_id                   serial        PRIMARY KEY,
-            task_id                  integer       NOT NULL,
-            name                     varchar(100)  NOT NULL,
-            description              varchar,
-            result_state             varchar(10),
-            result_exitcode          integer,
-            dependencies             varchar[]     NOT NULL,
-            dependencies_str         varchar,
-            command                  varchar       NOT NULL,
-            entrypoint               varchar       NOT NULL,
-            recoverable_exitcodes    integer[]     NOT NULL,
-            restartable              boolean       NOT NULL,
-            datavolumes              varchar[]     NOT NULL,
-            environment              varchar[][2]  NOT NULL,
-            imageuuid                varchar       NOT NULL,
-            cron                     varchar(100)  NOT NULL,
-            queued_by                varchar       NOT NULL,
-            run_start_time           integer,
-            run_finish_time          integer,
-            run_start_time_str       varchar,
-            run_finish_time_str      varchar,
-            elapsed_time             varchar,
-            max_cpu                  varchar,
-            max_memory               varchar,
-            max_network_in           varchar,
-            max_network_out          varchar,
-            max_diskio_in            varchar,
-            max_diskio_out           varchar,
-            time_scale               varchar[]     NOT NULL DEFAULT '{}',
-            cpu_history              varchar[]     NOT NULL DEFAULT '{}',
-            memory_history           varchar[]     NOT NULL DEFAULT '{}',
-            network_in_history       varchar[]     NOT NULL DEFAULT '{}',
-            network_out_history      varchar[]     NOT NULL DEFAULT '{}',
-            disk_in_history          varchar[]     NOT NULL DEFAULT '{}',
-            disk_out_history         varchar[]     NOT NULL DEFAULT '{}',
-            log                      varchar
-        );""")
-        self.conn.commit()
-    
-    def create_options_table(self):
-        #TODO
-        print "WIP"
-
-    def create_host_table(self):
-        #TODO
-        print "WIP"
-    
-    def create_agent_table(self):
-        """Create the table to store agent history"""
-        cur = self.conn.cursor()
-        cur.execute("""
-        CREATE TABLE agents (
-            agent_id                 serial        PRIMARY KEY,
-            host_ip                  varchar       NOT NULL,
-            agent_port               varchar,
-            instance_id              varchar,
-            instance_type            varchar,
-            available_memory         varchar,
-            agent_creation_time      integer,
-            agent_termination_time   integer,
-            run                      varchar       DEFAULT '',
-            last_action              varchar       DEFAULT '',
-            last_action_time         integer,
-            state                    varchar       DEFAULT 'active',
-            agent_key                varchar
-        );""")
-        self.conn.commit()
-        
-    def create_notifications_table(self):
-        #TODO
-        print "WIP"
-        

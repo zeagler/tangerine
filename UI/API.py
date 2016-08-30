@@ -14,6 +14,7 @@ This module holds all of the API reference calls. It is served CherryPy from
 """
 
 from json import dumps
+from docker_commands import get_log
 
 class API(object):
     def __init__(self, postgres):
@@ -233,3 +234,17 @@ class API(object):
             return dumps({"error": "Run ID is not defined"})
       
         return self.postgres.get_run(id)
+      
+    def get_log(self, log_name, lines=200):
+        """
+        
+        """
+        if not log_name:
+            return '{"error": "log_name must be present"}'
+        
+        log = get_log(log_name=log_name, lines=lines)
+        
+        if log:
+            return log
+        else:
+            return '{"error": "Could not get log for ' + log_name + '"}'

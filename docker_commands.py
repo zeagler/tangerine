@@ -6,6 +6,28 @@ In the future this will completely replace the Rancher module.
 from docker import Client
 from time import time
 from settings import Docker as options
+from subprocess import Popen, check_output
+
+def get_log(log_name, lines=200):
+    """
+    Get the container log from a run using the UNIX shell command `tail`
+    
+    Args:
+        log_name: The name of the file that holds the log. Cannot be empty, usually set
+                  by the Tangerine agent that started the container
+                  
+        lines: The amount of lines to return. Default is 200
+    """
+    try:
+        if not log_name:
+            return '{"error": "log_name must be present"}'
+        
+        log = check_output(["tail", "-n", str(lines), options["log_directory"] + "/" + log_name])
+        return log
+    except Exception as e:
+        print('{!r}; error trying to read log'.format(e))
+        return False
+    
 
 class Docker(object):
     def __init__(self):
@@ -39,7 +61,8 @@ class Docker(object):
                             name        = name + "-" + str(run_id),
                             command     = command,
                             entrypoint  = entrypoint,
-                            labels      = {"tangerine.task.container.name": name + "-" + str(run_id)},
+                            labels      = {"tangerine.task.container.name": name + "-" + str(run_id),
+                                           "tangerine.task.container.run_id": str(run_id)},
                             environment = dict(task.environment),
                             volumes     = volumes,
                             
@@ -49,6 +72,7 @@ class Docker(object):
             if container:
                 self.docker.start(container['Id'])
                 self.containers.append(container)
+                self.record_log(container['Id'], name + "-" + str(run_id))
                 return container
             
             else:
@@ -59,18 +83,22 @@ class Docker(object):
             return False
     
     def stop_container(self, containerId):
+        """ """
         self.docker.stop(containerId)
      
     def remove_container(self, containerId):
+        """ """
         self.docker.remove_container(containerId)
     
     def has_image(self, image):
+        """ """
         if self.docker.images(name=image):
             return True
         else:
             return False
     
     def pull(self, image):
+        """ """
         if "quay.io" in image:
             if not self.login(
                               registry="https://quay.io",
@@ -88,6 +116,7 @@ class Docker(object):
             return False
     
     def login(self, username, password, email="", registry=""):
+        """ """
         try:
             response = self.docker.login(username=username, password=password, registry=registry)
        
@@ -142,16 +171,28 @@ class Docker(object):
         
         return ret_dict
     
+    def record_log(self, containerId, log_name):
+        """ """
+        try:
+            f = open(options["log_directory"] + "/" + log_name + ".log", "w")
+            Popen(["docker", "logs", "-f", containerId], stdout=f, stderr=f)
+        except Exception as e:
+            print('{!r}; error trying to record log'.format(e))
+    
     def container_status(self, containerId):
+        """ """
         return self.docker.containers(all=True, filters={"id": containerId})[0]['State']
     
     def get_logs(self, containerId):
+        """ """
         return self.docker.logs(containerId, stream=False, tail=100, follow=False)
       
     def get_exit_code(self, containerId):
+        """ """
         return self.docker.inspect_container(containerId)['State']['ExitCode']
     
     def get_container_id(self, containerName):
+        """ """
         containers = self.docker.containers(all=True, filters={"label": "tangerine.task.container.name=" + containerName})
         
         if containers:

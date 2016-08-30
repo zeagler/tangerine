@@ -7,6 +7,7 @@ import os
 import urllib2
 import json
 import cherrypy
+from cherrypy.lib.static import serve_file
 from hashlib import sha256
 from settings import Web as options
 from API import API
@@ -23,11 +24,18 @@ class Statuspage(object):
     def index(self):
         """Main page for Tangerine's web UI"""
         tmpl = lookup.get_template("index.html.mako")
-        return tmpl.render(
-                            username = cherrypy.session['username'],
-                            userimageurl = cherrypy.session['userimageurl'],
-                            usertype = cherrypy.session['usertype']
-                          )
+        if options[USE_AUTH]:
+            return tmpl.render(
+                                username = cherrypy.session['username'],
+                                userimageurl = cherrypy.session['userimageurl'],
+                                usertype = cherrypy.session['usertype']
+                              )
+        else:
+            return tmpl.render(
+                                username = cherrypy.session.get("username", "dev"),
+                                userimageurl = cherrypy.session.get("userimageurl", "dev"),
+                                usertype = cherrypy.session.get("usertype", "dev")
+                              )
 
     @cherrypy.expose
     def login(self, code=None):
@@ -122,15 +130,38 @@ class Statuspage(object):
     @cherrypy.expose
     def history(self):
         tmpl = lookup.get_template("history.html.mako")
-        return tmpl.render(
-                            username = cherrypy.session['username'],
-                            userimageurl = cherrypy.session['userimageurl'],
-                            usertype = cherrypy.session['usertype']
-                          )
+        if options[USE_AUTH]:
+            return tmpl.render(
+                                username = cherrypy.session['username'],
+                                userimageurl = cherrypy.session['userimageurl'],
+                                usertype = cherrypy.session['usertype']
+                              )
+        else:
+            return tmpl.render(
+                                username = cherrypy.session.get("username", "dev"),
+                                userimageurl = cherrypy.session.get("userimageurl", "dev"),
+                                usertype = cherrypy.session.get("usertype", "dev")
+                              )
               
     @cherrypy.expose
     def get_runs(self, _=None):
         return API.get_runs()
+              
+    @cherrypy.expose
+    def get_log(self, log_name, lines=200, full_log=False):
+        if not log_name:
+            if full_log:
+                return None
+            else:
+                return '{"error": "log_name must be present"}'
+          
+        if full_log:
+            try:
+                return serve_file("/logs/" + log_name, "application/x-download", "attachment")
+            except Exception:
+                return None
+            
+        return API.get_log(log_name=log_name, lines=lines)
 
     @cherrypy.expose
     def logout(self):
@@ -164,7 +195,9 @@ class Statuspage(object):
     @cherrypy.expose
     def display_run(self, id=None):
         tmpl = lookup.get_template("display_run.html.mako")
-        return tmpl.render(run = API.get_run_object(id))
+        run = API.get_run_object(id)
+        log = API.get_log(run.log)
+        return tmpl.render(run = run, log = log)
     
     # TODO: Give dvl, env, prt better names
     @cherrypy.expose
@@ -234,14 +267,12 @@ def authenticate():
     """
     If the session isn't authorized this will send the user to the login page
     If the user agent for the session has changed this will invalidate the session
-    TODO: If the session is expired destroy it and return the user to the login page
     """
     
     path = cherrypy.request.path_info
     
     # Don't redirect if the user is going to the login page
     if (path == "/login"):
-        print "Don't redirect"
         return
 
     # Check if the session is authorized
@@ -258,7 +289,6 @@ def authenticate():
             cherrypy.session["redirect"] = "/"
          
         # Redirect the user to the login page
-        print "Session not authorized"
         cherrypy.session["login_msg"] = "Session not authorized"
         raise cherrypy.HTTPRedirect("login")
    
@@ -270,7 +300,6 @@ def authenticate():
         cherrypy.session.delete()
         cherrypy.lib.sessions.expire()
         cherrypy.session["login_msg"] = "User Agent has changed"
-        print "User Agent has changed"
         raise cherrypy.HTTPRedirect("login")
       
     # Check if the session has expired, if is not extend the session
@@ -285,7 +314,6 @@ def authenticate():
         cherrypy.session.delete()
         cherrypy.lib.sessions.expire()
         cherrypy.session["login_msg"] = "Session Expired"
-        print "Session Expired"
         raise cherrypy.HTTPRedirect("login")
         
     
@@ -306,12 +334,17 @@ def start_web_interface(pg):
     #    '/favicon.ico': {'tools.staticfile.on': True, 'tools.staticfile.filename': os.path.abspath(os.getcwd()) + '/UI/static/favicon.ico'}
     #}
     
+    if options['USE_AUTH']:
+        use_auth = True
+    else:
+        use_auth = False
+    
     # Set the global config.
     cherrypy.tools.authenticate = cherrypy.Tool('before_handler', authenticate)
     cherrypy.tools.secureheaders = cherrypy.Tool('before_finalize', secureheaders, priority=60)
     cherrypy.config.update({
                             #'environment': 'production',
-                            'tools.authenticate.on': True,
+                            'tools.authenticate.on': use_auth,
                             'tools.sessions.on': True,
                             'engine.autoreload.on': False,
                             'tools.sessions.timeout': 45,

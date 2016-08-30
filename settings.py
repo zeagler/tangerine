@@ -7,8 +7,17 @@ TODO: save settings in the database
 import os
 import yaml
 
-global config, Amazon, Docker, Web, Postgresql, Slack, Rancher
+global config, Amazon, Agent, Docker, Web, Postgresql, Slack, Rancher
 config = yaml.safe_load(open(os.path.abspath(os.getcwd()) + "/config.yml"))
+
+def check_agent():
+    """Check that the Agent settings are proper"""
+    global Agent
+    Agent = config['Agent']
+    
+    if 'DEVELOPMENT' not in Agent.keys(): Agent['DEVELOPMENT'] = False
+    
+    if not Agent['DEVELOPMENT'] == True:   Agent['DEVELOPMENT'] = False
 
 def check_amazon():
     """Check that the Amazon settings are proper"""
@@ -24,6 +33,7 @@ def check_amazon():
     if not Amazon['SPOT_FLEET_REQUEST_ID']:          Amazon['ENABLED'] = False; Amazon['SPOT_FLEET_REQUEST_ID'] = ""
 
 def check_docker():
+    """Check that the Docker settings are proper"""
     global Docker
     Docker = config['Docker']
 
@@ -80,17 +90,20 @@ def check_web_interface():
     global Web
     Web = config['Web']
 
+    if 'USE_AUTH' not in Web.keys():              Web['USE_AUTH'] = True
     if 'GITHUB_OAUTH_ID' not in Web.keys():       print "GITHUB_OAUTH_ID is not set"; exit(1)
     if 'GITHUB_OAUTH_SECRET' not in Web.keys():   print "GITHUB_OAUTH_SECRET is not set"; exit(1)
     if 'SSL_CERTIFICATE' not in Web.keys():       print "SSL_CERTIFICATE is not set, SSL is required for now"; exit(1)
     if 'SSL_PRIVATE_KEY' not in Web.keys():       print "SSL_PRIVATE_KEY is not set, SSL is required for now"; exit(1)
     if 'SSL_CERTIFICATE_CHAIN' not in Web.keys(): Web['SSL_CERTIFICATE_CHAIN'] = ""
 
+    if not Web['USE_AUTH'] == True:               Web['USE_AUTH'] = False
     if not Web['GITHUB_OAUTH_ID']:                print "GITHUB_OAUTH_ID is not set"; exit(1)
     if not Web['GITHUB_OAUTH_SECRET']:            print "GITHUB_OAUTH_ID is not set"; exit(1)
     if not Web['SSL_CERTIFICATE']:                print "SSL_CERTIFICATE is not set, SSL is required for now"; exit(1)
     if not Web['SSL_PRIVATE_KEY']:                print "SSL_PRIVATE_KEY is not set, SSL is required for now"; exit(1)
 
+check_agent()
 check_amazon()
 check_docker()
 check_postgresql()

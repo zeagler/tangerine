@@ -178,7 +178,7 @@ def central_server():
         # Check if any queued tasks have dependencies fulfilled. Put them in the `ready` queue
         #   if all dependencies have a state of `success`
 
-        id = postgres.pop_task_queue()
+        id = postgres.pop_queue("task_queue")
 
         if id:
             task = postgres.get_task(id)
@@ -195,7 +195,7 @@ def central_server():
                 elif task.state == "success" or task.state == "waiting":
                     task.check_next_run_time()
         else:
-            postgres.load_task_queue()
+            postgres.load_queue("task_queue")
             
             # Sleep between load and process
             sleep(3)
