@@ -2,8 +2,8 @@
 This module has functions to scale Spot Fleet Requests and terminate
   EC2 instances.
 """
+from base64 import b64encode
 from boto3 import client
-from os import getenv, environ
 from settings import Amazon as options
 
 class Amazon():
@@ -66,8 +66,143 @@ class Amazon():
       
     def spot_fleet_request_id(self):
         return options['SPOT_FLEET_REQUEST_ID']
+      
+    def create_instance(self, profile):
+        """
+        Create a single EC2 instance
+        
+        Args:
+            profile: The Tangerine instance profile to use when provisioning the EC2 instance
 
-    # TODO Create function to scale auto-scaling group (for non spot-instance)
+        Returns:
+            The instance id of the created instance if on-demand
+            The spot request id if spot instance
+        """
+        # TODO: Add a tag for the instance profile name and host id
+        if self.enabled():
+            if profile.spot_instance == True:
+                response = create_spot_instance(profile)
+                if response:
+                    sir_id = response['SpotInstanceRequests'][0]['SpotInstanceRequestId']
+                    if sir_id:
+                        #TODO: Log spot instance request in postgres database
+                        #      Monitor request until an instance is started
+                      
+                        #      Tag the instance on creation
+                        #tag_instance(response['Instances'][0]['InstanceId'], "Name", profile.name_tag)
+                        return sir_id
+            else:
+                response = create_on_demand_instance(profile)
+                if response:
+                    instance_id = response['Instances'][0]['InstanceId']
+                    if instance_id:
+                        tag_instance(instance_id, "Name", profile.name_tag)
+                        return instance_id
 
+    def create_spot_instance(self, profile):
+        """
+        Create a single EC2 spot instance
+        
+        Args:
+            profile: The Tangerine instance profile to use when provisioning the EC2 instance
 
+        Returns:
+            The response of the spot instance request
+        """
+        # TODO: determine the subnet/AZ with the lowest cost
+        if self.enabled():
+            return ec2.request_spot_instances(
+                DryRun=False,
+                SpotPrice=profile.spot_price,
+                InstanceCount=1,
+                Type='one-time',
+                LaunchSpecification={
+                    'ImageId': profile.AMI,
+                    'KeyName': profile.keyname,
+                    'SecurityGroupIds': profile.security_groups,
+                    'UserData': b64encode(profile.user_data),
+                    'InstanceType': profile.instance_type,
+                    'BlockDeviceMappings': [
+                        {
+                            'VirtualName': 'ebs0',
+                            'DeviceName': '/dev/sda1',
+                            'Ebs': {
+                                'VolumeSize': profile.block_ebs_size,
+                                'DeleteOnTermination': True,
+                                'VolumeType': profile.block_ebs_type,
+                            },
+                        },
+                    ],
+                    'SubnetId': profile.subnet_id,
+                    'IamInstanceProfile': {
+                        'Name': profile.iam_profile_name
+                    },
+                    'EbsOptimized': False,
+                    'Monitoring': {
+                        'Enabled': False
+                    },
+                }
+            )
 
+    def create_on_demand_instance(self, profile):
+        """
+        Create a single on-demand EC2 instance
+        
+        Args:
+            profile: The Tangerine instance profile to use when provisioning the EC2 instance
+        """
+        if self.enabled():
+            return ec2.run_instances(
+                DryRun=False,
+                ImageId=profile.AMI,
+                MinCount=1,
+                MaxCount=1,
+                KeyName=profile.keyname,
+                SecurityGroupIds=profile.security_groups,
+                UserData=profile.user_data,
+                InstanceType=profile.instance_type,
+                BlockDeviceMappings=[
+                    {
+                        'VirtualName': 'ebs0',
+                        'DeviceName': '/dev/sda1',
+                        'Ebs': {
+                            'VolumeSize': profile.block_ebs_size,
+                            'DeleteOnTermination': True,
+                            'VolumeType': profile.block_ebs_type
+                        },
+                    },
+                ],
+                Monitoring={
+                    'Enabled': False
+                },
+                SubnetId=profile.subnet_id,
+                DisableApiTermination=False,
+                InstanceInitiatedShutdownBehavior='stop',
+                IamInstanceProfile={
+                    'Name': profile.iam_profile_name
+                },
+                EbsOptimized=False
+            )
+
+    def tag_instance(self, instance_id, tag_key, tag_val):
+        """
+        Add a tag to an EC2 instance
+        
+        Args:
+            instance_id: An string array of ids of the EC2 instances to add the tag to
+            tag_key: The tag key
+            tag_val: The tag value
+        """
+        if self.enabled():
+            return ec2.create_tags(
+                DryRun=False,
+                Resources=[
+                    instance_id,
+                ],
+                Tags=[
+                    {
+                        'Key': tag_key,
+                        'Value': tag_val
+                    },
+                ]
+            )

@@ -25,6 +25,6 @@ RUN apk add --no-cache --update \
 RUN mkdir /tangerine
 
 COPY *.py README.md /tangerine/
-COPY UI /tangerine/UI
+COPY static /tangerine/static
 CMD ["python", "tangerine.py"]
 WORKDIR /tangerine

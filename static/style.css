@@ -13,6 +13,8 @@ body {
 
 #task_panel .panel-body {
     height: calc(100vh - 205px);
+    display: flex;
+    flex-flow: column;
 }
 
 #add_task_table td {
@@ -35,9 +37,34 @@ body {
     background: #ffffff;
 }
 
-#tasks {
-    height: calc(100vh - 230px);
-    overflow-y: auto;
+#job_back {
+  height: 60px;
+  width: 60px;
+  outline: none;
+  background-color: #dddddd;
+  border-radius: 50%;
+  margin-top: 75%;
+  font-size: 200%;
+  text-align: center;
+}
+
+.center_all {
+  margin-top: 50%;
+  text-align: center;
+}
+
+.hide-overflow {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.job_panel {
+  position: relative;
+  height: auto;
+  margin-top: 50%;
+  margin-left: 50%;
+  flex: 0 1 auto;
 }
 
 #switch {
@@ -45,8 +72,10 @@ body {
 }
 
 #tasks {
+    flex: 1 1 auto;
     width: 100%;
     text-align: center;
+    overflow-y: auto!important;
 }
 
 #tasks .task {
@@ -60,6 +89,7 @@ body {
     border-radius: 20px;
     white-space:normal !important;
     max-width: 200px;
+    overflow: hidden;
 }
 
 #tasks .Stopped, .Stopping {
@@ -71,7 +101,6 @@ body {
     text-align: center;
     font: bold 20px Helvetica;
     padding-top: 10px;
-    white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
 }

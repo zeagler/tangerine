@@ -8,7 +8,7 @@ from settings import Web as options
 
 from mako.template import Template
 from mako.lookup import TemplateLookup
-lookup = TemplateLookup(directories=['UI/static'])
+lookup = TemplateLookup(directories=['static'])
 
 class Agent_Server(object):
     """Render for the web application"""

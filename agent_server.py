@@ -5,7 +5,7 @@ This starts the Tangerine Agent which is responsible for processing
 
 import thread
 from atexit import register
-from time import sleep, time
+from time import sleep, strftime, time
 import urllib2
 from uuid import uuid4
 
@@ -14,20 +14,82 @@ from amazon_functions import Amazon
 from docker_commands import Docker
 from postgres_functions import Postgres
 from postgres_connection import close_connections
-from rancher_functions import Rancher
 from slack_functions import Slack
-from UI.agent_web import start_agent_web
+from agent_web import start_agent_web
 from settings import Agent as options
+from job import get_jobs
 
 from requests.exceptions import ReadTimeout
 
-def start_task(task):
+def start_task(task, job=None):
     """
     Attempt to schedule a task with a `ready` state.
     """
-    
-    task.starting()
 
+    task.starting()
+    
+    # Set fields inherited from the parent
+    if not job == None:
+        if task.command == '':
+            task.command = job.command_raw
+            task.command = task.command.replace("$$count", str(task.count))
+            task.command = task.command.replace("$$date", strftime("%Y%m%d"))
+            task.command = task.command.replace("$$time", strftime("%H%M%S"))
+            
+            if task.environment:
+                for i in range(len(task.environment)):
+                        task.command = task.command.replace("$$" + task.environment[i][0], task.environment[i][1])
+
+            
+        if task.entrypoint == '':
+            task.entrypoint = job.entrypoint_raw
+            task.entrypoint = task.entrypoint.replace("$$count", str(task.count))
+            task.entrypoint = task.entrypoint.replace("$$date", strftime("%Y%m%d"))
+            task.entrypoint = task.entrypoint.replace("$$time", strftime("%H%M%S"))
+            
+            if task.environment:
+                for i in range(len(task.environment)):
+                        task.entrypoint = task.entrypoint.replace("$$" + task.environment[i][0], task.environment[i][1])
+
+        if task.imageuuid == '':
+            task.imageuuid = job.imageuuid
+            
+        env_dict = dict(task.environment)
+        for env in job.environment_raw:
+            # Don't include the parent value if the environment variable was overridden
+            if env[0] in env_dict.keys():
+                continue
+              
+            # Don't include the parent value if the environment variable was removed
+            elif "env:" + env[0] in task.removed_parent_defaults:
+                continue
+              
+            # Add the parent's environment variable if the above conditions are not applicable
+            else:
+                env[1] = env[1].replace("$$count", str(task.count))
+                env[1] = env[1].replace("$$date", strftime("%Y%m%d"))
+                env[1] = env[1].replace("$$time", strftime("%H%M%S"))
+                
+                task.environment.append(env)
+                task.command = task.command.replace("$$" + env[0], env[1])
+                task.entrypoint = task.entrypoint.replace("$$" + env[0], env[1])
+              
+        dvl_dict = dict([d.split(":") for d in task.datavolumes])
+        for dvl in job.datavolumes:
+            mount_destination = dvl.split(":")[1]
+          
+            # Don't include the parent value if the environment variable was overridden
+            if mount_destination in dvl_dict.values():
+                continue
+              
+            # Don't include the parent value if the environment variable was removed
+            elif "dvl:" + mount_destination in task.removed_parent_defaults:
+                continue
+              
+            # Add the parent's environment variable if the above conditions are not applicable
+            else:
+                task.datavolumes.append(dvl)
+    
     # Reserve the next run_id
     run_id = postgres.reserve_next_run_id();
     agent.update_run(run_id)
@@ -96,7 +158,7 @@ def check_exitcode(run):
 
     task = postgres.get_task(run.task_id)
     exit_code = run.result_exitcode
-    
+
     # If the exit code is 0 then the tasks state is set to `success`
     # If the exit code is 127, or if it exit code is in a user-defined
     #   list that indicates it should not be restarted, then the state
@@ -132,13 +194,15 @@ def check_halting(run, container):
     """
     task = postgres.get_task(run.task_id)
 
-    if task.state == "stopping" or task.state == "disabling":
+    if task.state == "stopping" or task.state == "disabling" or task.state == "deleting":
         docker.stop_container(container['Id'])
 
         if task.state == "stopping":
             task.stop()
         elif task.state == "disabling":
             task.disable()
+        elif task.state == "deleting":
+            task.delete()
         
         return "stopped"
 
@@ -154,7 +218,7 @@ def add_agent():
         print "Could not reserve an agent id"
         return
       
-    if options['DEVELOPMENT']:
+    if options['DEVELOPMENT'] == True:
         import socket
         postgres.add_agent(
                           agent_id = agent_id,
@@ -205,7 +269,16 @@ def agent_server():
             
             if task:
                 if task.state == "ready":
-                    start_task(task)
+                    if task.parent_job:
+                        job = get_jobs(id=task.parent_job)[0]
+                        
+                        if job == None:
+                            console.log("Couldn't get parent job")
+                            continue
+                    else:
+                        job = None
+                        
+                    start_task(task, job)
                     agent.update_run("")
                     
         else:

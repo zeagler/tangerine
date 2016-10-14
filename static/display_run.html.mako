@@ -9,7 +9,7 @@
                 <li><a href="#metrics" data-toggle="tab">Metrics</a></li>
                 <li><a href="#log" data-toggle="tab">Log</a></li>
             </ul>
-            
+
             <div class="tab-content" style="width: 100%;">
                 <div class="tab-pane active" id="details">
                     <dl class="dl-horizontal pull-left">

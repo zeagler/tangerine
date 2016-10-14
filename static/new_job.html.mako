@@ -32,7 +32,7 @@
     $('.reset-form').on('click', function(e) {
         e.preventDefault();
         
-        document.getElementById('add_task_form').reset();
+        document.getElementById('add_job_form').reset();
         $.each($('.added'), function(i, obj) {
             if ($(obj).find("input")[0].value === "") {
                 obj.remove();
@@ -45,23 +45,10 @@
      *
      * Enable jQuery tooltips, hide the error tooltips and error alert
      * Enable the pillbox for adding dependencies
-     * Enable typeahead and use the tasks from the main page as the datasource
      ***/
     $('[data-toggle="tooltip"]').tooltip();
     $("#name,#image").tooltip('disable');
     $("#err_alert").hide()
-    $('#add-dep').pillbox();
-    
-    // Add type ahead for dependencies
-    $('#find-dep .typeahead').typeahead({
-        hint: false,
-        highlight: true,
-        minLength: 1
-    },
-    {
-        name: 'tasks',
-        source: findTasks()
-    });
 
     /***
      * Enable the "add" button for environment and data volumes
@@ -78,25 +65,32 @@
     });
     
     /***
-     * Try to add a task
+     * Try to add a job
      *
      * First do client side validatation of the request to ensure there are no errors
      * Then send the request to the the server which will return a success or error message.
      * If there is an error message present it to the user and allow them to correct the fields.
      * If the request succeeds close the modal to return the user to the overview display
      ***/
-    function addTask(modal) {
-        // Is the task name valid?
+    function addJob(modal) {
+        // Is the job name valid?
         if ($('#name').val() == "") {
             $(this).parent().addClass("has-error");
             $("#err_msg").html("<strong>Error</strong> Name cannot be blank")
+            $("#err_alert").show()
+            return
+        } else if ($('#name').val().length > 100) {
+            $(this).parent().addClass("has-error");
+            $("#err_msg").html("<strong>Error</strong> Name must be 100 characters or less")
             $("#err_alert").show()
             return
         }
         
         // Is the image valid?
         if ($('#image').val() == "") {
-            alert("no image")
+            $(this).parent().addClass("has-error");
+            $("#err_msg").html("<strong>Error</strong> Image must be set")
+            $("#err_alert").show()
             return
         }
         
@@ -105,33 +99,28 @@
         // Are the data-volumes valid?
       
         // Serialize the form to get a request string
-        form = $("#add_task_form").serialize()
+        form = $("#add_job_form").serialize()
           
         // Add the restart value to the request string
-        form += "&rsrt=" + $('#rsrt')[0].checked
+        form += "&restartable=" + $('#restartable')[0].checked
         
         // Add each environment variable to the request string
         $('.env').each(function(i, obj) {
             if ($(obj).find("input")[0].value !== "") {
-                form += "&env=" + $(obj).find("input")[0].value + "=" + $(obj).find("input")[1].value;
+                form += "&environment=" + $(obj).find("input")[0].value + "=" + $(obj).find("input")[1].value;
             }
         });
         
         // Add each data volume to the request string
         $('.dvl').each(function(i, obj) {
             if ($(obj).find("input")[0].value !== "" && $(obj).find("input")[1] !== "") {
-                form += "&dvl=" + $(obj).find("input")[0].value + ":" + $(obj).find("input")[1].value;
+                form += "&datavolumes=" + $(obj).find("input")[0].value + ":" + $(obj).find("input")[1].value;
             }
-        });
-        
-        // Add each dependencies to the request string
-        $.each($('#add-dep').pillbox('items'), function(i, dep) {
-            form += "&dep=" + dep.value;
         });
         
         // Send the request
         xhttp = new XMLHttpRequest();
-        xhttp.open("GET", "add_task?" + form, true);
+        xhttp.open("GET", "add_job?" + form, true);
         xhttp.send();
         
         // TODO: Check the return value to see if we succeeded
@@ -154,24 +143,24 @@
 
 <div class="modal-header">
     <button type="button" class="close" data-dismiss="modal">&times;</button>
-    <h4 class="modal-title">Add a Task</h4>
+    <h4 class="modal-title">Add a Job</h4>
 </div>
 
-<div id="add-task-modal-body" class="modal-body" style="text-align: center;">
+<div id="modal-body" class="modal-body" style="text-align: center;">
     <div id="err_alert" class="alert alert-danger fade in" role="alert">
         <div id="err_msg"></div>
     </div>
-    <form class="form-horizontal" id="add_task_form" role="form" autocomplete="off">
+    <form class="form-horizontal" id="add_job_form" role="form" autocomplete="off">
         <div class="form-group">
             <div class="col-sm-6">
                 <input class="form-control" id="name" name="name" placeholder="Name" type="text" data-toggle="tooltip" data-placement="bottom" title="Name cannot be blank">
             </div>
-          
+
             <div class="col-sm-6">
-              <textarea class="form-control autoExpand" id="desc" name="desc" rows='1' data-max-rows='3' placeholder="Description" style="overflow-x:hidden; resize: none;"></textarea>
+              <textarea class="form-control autoExpand" name="description" rows='1' data-max-rows='3' placeholder="Description" style="overflow-x:hidden; resize: none;" value=""></textarea>
             </div>
         </div>
-        <ul id="task_switch" class="nav nav-tabs nav-justified" style="padding-bottom: 10px">
+        <ul id="job_switch" class="nav nav-tabs nav-justified" style="padding-bottom: 10px">
             <li class="active"><a href="#container" data-toggle="tab">Container</a></li>
             <li><a href="#env-pane" data-toggle="tab">Environment</a></li>
             <li><a href="#sch" data-toggle="tab">Scheduling</a></li>
@@ -181,29 +170,29 @@
             <div class="tab-pane active" id="container">
                 <div class="form-group">
                     <label class="control-label col-sm-2">
-                        Image <span class="glyphicon glyphicon-question-sign" style="color: lightgrey" data-toggle="tooltip" data-placement="top" title="The images this task will be ran on. You can use `image` or `image:tag`"></span>
+                        Image <span class="glyphicon glyphicon-question-sign" style="color: lightgrey" data-toggle="tooltip" data-placement="top" title="The image that all tasks within this job will be ran with. You can use `image` or `image:tag`"></span>
                     </label>
                     <div class="col-sm-10"><input class="form-control" id="image" name="image" data-toggle="tooltip" data-placement="bottom" title="Image cannot be blank"></div>
                 </div>
                 <div class="form-group">
                     <label class="control-label col-sm-2">Command</label>
-                    <div class="col-sm-10"><input class="form-control" id="cmd" name="cmd"></div>
+                    <div class="col-sm-10"><input class="form-control" name="command" value=""></div>
                 </div>
                 <div class="form-group">
                     <label class="control-label col-sm-2">Entrypoint</label>
-                    <div class="col-sm-10"><input class="form-control" id="etp" name="etp"></div>
+                    <div class="col-sm-10"><input class="form-control" name="entrypoint" value=""></div>
                 </div>
                 <div class="form-group">
                     <label class="control-label col-sm-2 disabled">Working Dir</label>
-                    <div class="col-sm-10"><input class="form-control" disabled id="wdr" name="wdr"></div>
+                    <div class="col-sm-10"><input class="form-control" disabled name="wdr" value=""></div>
                 </div>
                 <div class="form-group">
                     <label class="control-label col-sm-2 disabled">User</label>
-                    <div class="col-sm-10"><input class="form-control" disabled id="usr" name="usr"></div>
+                    <div class="col-sm-10"><input class="form-control" disabled name="usr" value=""></div>
                 </div>
                 <div class="form-group">
                     <label class="control-label col-sm-2">Console</label>
-                    <div class="col-sm-10"><input class="form-control" disabled id="csl" name="csl"></div>
+                    <div class="col-sm-10"><input class="form-control" disabled name="csl" value=""></div>
                 </div>
             </div>
             <div class="tab-pane" id="env-pane">
@@ -214,14 +203,14 @@
                             <span class="glyphicon glyphicon-plus"></span>
                         </button>
                     </span>
-                    <div id="env">
-                        <span class="form-inline col-sm-10 pull-right added env"><span class="pull-left" style="width: 100%">
-                            <input class="input form-control" style="width: 46%" type="text">
-                            <span> = </span>
-                            <input class="input form-control" style="width: 46%" type="text">
-                            <span> </span>
-                            <button class="btn btn-danger remove-this" >-</button>
-                        </span></span>
+                    <div id="environment">
+                            <span class="form-inline col-sm-10 pull-right added env"><span class="pull-left" style="width: 100%">
+                                <input class="input form-control" style="width: 46%" type="text" value="">
+                                <span> = </span>
+                                <input class="input form-control" style="width: 46%" type="text" value="">
+                                <span> </span>
+                                <button class="btn btn-danger remove-this" >-</button>
+                            </span></span>
                     </div>
                 </div>
                 <div class="form-group">
@@ -231,14 +220,14 @@
                             <span class="glyphicon glyphicon-plus"></span>
                         </button>
                     </span>
-                    <div id="dvl">
-                        <span class="form-inline col-sm-10 pull-right added dvl"><span class="pull-left" style="width: 100%">
-                            <input class="input form-control" style="width: 46%" type="text">
-                            <span> : </span>
-                            <input class="input form-control" style="width: 46%" type="text">
-                            <span> </span>
-                            <button class="btn btn-danger remove-this" >-</button>
-                        </span></span>
+                    <div id="datavolumes">
+                            <span class="form-inline col-sm-10 pull-right added dvl"><span class="pull-left" style="width: 100%">
+                                <input class="input form-control" style="width: 46%" type="text" value="">
+                                <span> : </span>
+                                <input class="input form-control" style="width: 46%" type="text" value="">
+                                <span> </span>
+                                <button class="btn btn-danger remove-this" >-</button>
+                            </span></span>
                     </div>
                 </div>
                 <div class="form-group disabled">
@@ -248,8 +237,8 @@
                             <span class="glyphicon glyphicon-plus"></span>
                         </button>
                     </span>
-                    <div id="prt">
-                        <span class="form-inline col-sm-5 pull-left added prt"><span class="pull-left" style="width: 100%">
+                    <div id="port">
+                        <span class="form-inline col-sm-5 pull-left added port"><span class="pull-left" style="width: 100%">
                             <input class="disabled input form-control" style="width: 40%" type="text">
                             <span> : </span>
                             <input class="disabled input form-control" style="width: 40%" type="text">
@@ -264,49 +253,37 @@
                     <label class="control-label col-sm-2">State</label>
                     <div class="col-sm-10">
                         <select class="form-control radio-inline" id="state" name="state" style="display: inline-block;" placeholder="queued">
-                            <option value="queued">queue to run now</option>
+                            <option value="running">queue to run now</option>
                             <option value="waiting">wait until next cron time</option>
                             <option value="stopped">disable until user intervention</option>
                         </select>
                     </div>
                 </div>
-
-                <div class="form-group fuelux">
-                    <label class="control-label col-sm-2">Dependencies</label>
-                    <div class="col-sm-10 pillbox pull-right" data-initialize="pillbox" id="add-dep">
-                        <ul class="clearfix pill-group">
-                            <li class="pillbox-input-wrap btn-group" id="find-dep">
-                                <input type="text" class="form-control typeahead pillbox-add-item" style="min-width: 240px;" placeholder="start typing to find dependencies">
-                            </li>
-                        </ul>
-                    </div>
-                </div>
-
                 <div class="form-group">
                     <label class="control-label col-sm-2">Cron</label>
-                    <div class="col-sm-10"><input class="form-control" id="cron" name="cron"></div>
+                    <div class="col-sm-10"><input class="form-control" name="cron" value=""></div>
                 </div>
             </div>
             <div class="tab-pane" id="restart">
                 <div class="form-group">
-                    <input type="checkbox" class="checkbox-inline" id="rsrt" checked="true">
+                    <input type="checkbox" class="checkbox-inline" id="restartable" checked="true">
                     <label class="control-label">Restartable</label>
                 </div>
                 <div class="form-group">
                     <label class="control-label col-sm-2">Recoverable Exit Codes</label>
-                    <div class="col-sm-10"><input class="form-control" id="rec" name="rec" value="0""></div>
+                    <div class="col-sm-10"><input class="form-control" name="exitcodes" value="0"></div>
                 </div>
                 <div class="form-group">
                     <label class="control-label col-sm-2">Max Failures</label>
-                    <div class="col-sm-10"><input class="form-control" id="mxf" name="mxf" value="3"></div>
+                    <div class="col-sm-10"><input class="form-control" name="max_failures" value="3"></div>
                 </div>
                 <div class="form-group">
                     <label class="control-label col-sm-2">Inital Delay(min)</label>
-                    <div class="col-sm-10"><input class="form-control" id="idl" name="idl" value="0"></div>
+                    <div class="col-sm-10"><input class="form-control" name="delay" value="0"></div>
                 </div>
                 <div class="form-group">
                     <label class="control-label col-sm-2">Delay After Failure (min)</label>
-                    <div class="col-sm-10"><input class="form-control" id="daf" name="daf" value="5"></div>
+                    <div class="col-sm-10"><input class="form-control" name="faildelay" value="5"></div>
                 </div>
             </div>
         </div>
@@ -316,5 +293,5 @@
 <div class="modal-footer" style="width: 100%; text-align:center">
     <button type="button" class="btn btn-default pull-left" style="width: 100px;" data-dismiss="modal">Close</button>
     <button type="button" class="btn btn-default pull-left reset-form" style="width: 100px;">Clear</button>
-    <button type="button" class="btn btn-primary pull-right" style="width: 100px;" onclick="addTask('addTaskModal')">Add</button>
+    <button type="button" class="btn btn-primary pull-right" style="width: 100px;" onclick="addJob('addTaskModal')">Add</button>
 </div>
