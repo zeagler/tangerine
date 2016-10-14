@@ -17,7 +17,8 @@ from amazon_functions import Amazon
 from postgres_functions import Postgres
 from postgres_connection import close_connections
 from slack_functions import Slack
-from UI.web_interface import start_web_interface
+from web_interface import start_web_interface
+from job import get_jobs
 
 def check_queued_task(task):
     if not task.waiting_on_dependencies():
@@ -156,13 +157,147 @@ def check_ec2_fleet():
         except Exception as e:
             print('{!r}; error in EC2 scale thread'.format(e))
 
+def job_status(tasks):
+    """
+    Determine the status of a job based on the state of the tasks contained in the job.
+    """
+    success = sum(1 if task.state == "success" else 0 for task in tasks)
+    failed  = sum(1 if task.state == "failed"  else 0 for task in tasks)
+    ready   = sum(1 if task.state == "ready"   else 0 for task in tasks)
+    running = sum(1 if task.state == "running" else 0 for task in tasks)
+    queued  = sum(1 if task.state == "queued"  else 0 for task in tasks)
+    stopped = sum(1 if task.state == "stopped" else 0 for task in tasks)
+    warnings = [task.warning for task in tasks if task.warning]
 
-"""
-This starts the central server which is responsible for hosting the
-  web interface, scaling the AWS Spot Fleet request and cleaning out
-  inactive objects from Rancher
-"""
+    if warnings:
+        return "blocked"
+        
+    if success == len(tasks):
+        return "success"
+        
+    elif success + failed == len(tasks):
+        # All the tasks executed, but there was an error
+        # TODO: alert the user in the UI when a task in a job fails
+        return "failed"
+    
+    elif success + failed + queued + ready + running == len(tasks):
+        return "running"
+    
+    elif success + failed + stopped == len(tasks):
+        # No tasks are awaiting execution, the user stopped some tasks
+        return "stop"
+        
+    elif success + failed + queued + stopped == len(tasks):
+        # Tasks are awaiting execution, but they have not moved to the ready state
+        #   This might be caused by a blocked task
+        #
+        # Check if the queued tasks are dependant on a failed or stopped task
+        # TODO: add an option in the UI to stop all dependent tasks
+        
+        for task in tasks:
+            if task.state == "queued":
+                for dependency in task.dependencies:
+                    for task_2 in tasks:
+                        if task_2.name == dependency:
+                            if task_2.state == "failed" or task_2.state == "stopped":
+                                print("'" + str(task.name) + "' in job #" + str(task.parent_job) + " is dependent on the stopped or failed task '" + str(task_2.name) + "'")
+                                return "blocked"
+                    else:
+                        print("'" + str(task.name) + "' in job #" + str(task.parent_job) + " is dependent on a task '" + str(task_2.name) + "' which does not exist in the job")
+                        return "blocked"
+    else:
+        return
+    
+                                      
+def monitor_jobs():
+    """
+    Continously monitor the job queue. Start a job when it's cron schedule is passed.
+    """
+    while True:
+        try:
+            id = postgres.pop_queue("job_queue")
+
+            if id:
+                job_list = get_jobs(id=id)
+
+                if job_list:
+                    job = job_list[0]
+                    tasks = job.child_tasks()
+                    
+                    # If a task inside the job was misfired mark the job as running
+                    if not job.state == "running":
+                        set_running = False
+                        for task in tasks:
+                            if task.state == "running" or task.state == "ready" or task.state == "queued":
+                                job.update("state", "running")
+                                set_running = True
+                                break
+
+                        # Skip to the next job if the above code changed the state of this job
+                        if set_running:
+                            continue
+
+                    # Check the job for it recurring time
+                    if job.state == "success" or job.state == "waiting":
+                        job.check_next_run_time()
+                        
+                    # Check the recurring time for failed jobs if the user enabled it
+                    elif job.restartable == True and job.state == "failed":
+                        job.check_next_run_time()
+                    
+                    # Check the child tasks to determine if the job is still active
+                    #
+                    # if tasks are blocked mark the job and show a warning
+                    # if no tasks can be ran mark the job as failed or stopped
+                    # otherwise assume the job is healthy
+                    
+                    elif job.state == "stopping":
+                        for task in tasks:
+                            if not task.state == "stopped":
+                                break
+                        else:
+                            job.stop()
+                    
+                    elif job.state == "running":
+                        status = job_status(tasks)
+                        
+                        if status == "success":
+                            job.success()
+                            
+                        elif status == "failed":
+                            job.failed()
+                            
+                        elif status == "stop":
+                            job.warn(None)
+                            job.update("state", "stopped")
+                            
+                        elif status == "blocked":
+                            if not job.warning:
+                                job.warn("Tasks are blocked")
+                                
+                        elif status == "running":
+                            if job.warning:
+                                job.warn(None)
+                            
+                            
+            else:
+                postgres.load_queue("job_queue")
+                
+                # Sleep between load and process
+                sleep(3)
+
+        except Exception as e:
+            print('{!r}; error monitoring jobs'.format(e))
+                
+            # Sleep after an error
+            sleep(3)
+
 def central_server():
+    """
+    This starts the central server which is responsible for hosting the
+      web interface, scaling the AWS Spot Fleet request and cleaning out
+      inactive objects from Rancher
+    """
     global postgres, amazon, slack
     register(close_connections) # Close postgres connection at exit
     postgres = Postgres()
@@ -172,30 +307,37 @@ def central_server():
     thread.start_new_thread(start_web_interface, (postgres, ))
     thread.start_new_thread(check_ec2_fleet, ())
     thread.start_new_thread(check_agents, ())
+    thread.start_new_thread(monitor_jobs, ())
 
     # Infinite loop while the functions above do the work
     while True:
-        # Check if any queued tasks have dependencies fulfilled. Put them in the `ready` queue
-        #   if all dependencies have a state of `success`
+        try:
+            # Check if any queued tasks have dependencies fulfilled. Put them in the `ready` queue
+            #   if all dependencies have a state of `success`
 
-        id = postgres.pop_queue("task_queue")
+            id = postgres.pop_queue("task_queue")
 
-        if id:
-            task = postgres.get_task(id)
+            if id:
+                task = postgres.get_task(id)
+                
+                if task:  
+                    if task.state == "queued":
+                        check_queued_task(task)
+                        
+                    elif task.state == "running":
+                        #check_running_task(task)
+                        pass
+                      
+                    # TODO: also check the recurring time for failed tasks
+                    elif task.state == "success" or task.state == "waiting":
+                        task.check_next_run_time()
+            else:
+                postgres.load_queue("task_queue")
+                
+                # Sleep between load and process
+                sleep(3)
+        except Exception as e:
+            print('{!r}; error monitoring tasks'.format(e))      
             
-            if task:  
-                if task.state == "queued":
-                    check_queued_task(task)
-                    
-                elif task.state == "running":
-                    #check_running_task(task)
-                    pass
-                  
-                # TODO: also check the recurring time for failed tasks
-                elif task.state == "success" or task.state == "waiting":
-                    task.check_next_run_time()
-        else:
-            postgres.load_queue("task_queue")
-            
-            # Sleep between load and process
+            # Sleep after an error
             sleep(3)

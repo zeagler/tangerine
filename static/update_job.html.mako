@@ -32,7 +32,7 @@
     $('.reset-form').on('click', function(e) {
         e.preventDefault();
         
-        document.getElementById('add_task_form').reset();
+        document.getElementById('add_job_form').reset();
         $.each($('.added'), function(i, obj) {
             if ($(obj).find("input")[0].value === "") {
                 obj.remove();
@@ -45,23 +45,11 @@
      *
      * Enable jQuery tooltips, hide the error tooltips and error alert
      * Enable the pillbox for adding dependencies
-     * Enable typeahead and use the tasks from the main page as the datasource
+     * Enable typeahead and use the jobs from the main page as the datasource
      ***/
     $('[data-toggle="tooltip"]').tooltip();
     $("#name,#image").tooltip('disable');
     $("#err_alert").hide()
-    $('#add-dep').pillbox();
-    
-    // Add type ahead for dependencies
-    $('#find-dep .typeahead').typeahead({
-        hint: false,
-        highlight: true,
-        minLength: 1
-    },
-    {
-        name: 'tasks',
-        source: findTasks()
-    });
 
     /***
      * Enable the "add" button for environment and data volumes
@@ -78,25 +66,33 @@
     });
     
     /***
-     * Try to add a task
+     * Try to add a job
      *
      * First do client side validatation of the request to ensure there are no errors
      * Then send the request to the the server which will return a success or error message.
      * If there is an error message present it to the user and allow them to correct the fields.
      * If the request succeeds close the modal to return the user to the overview display
      ***/
-    function addTask(modal) {
-        // Is the task name valid?
+    function updateJob(modal) {
+        // Is the job name valid?
         if ($('#name').val() == "") {
             $(this).parent().addClass("has-error");
             $("#err_msg").html("<strong>Error</strong> Name cannot be blank")
             $("#err_alert").show()
             return
+        } else if ($('#name').val().length > 100) {
+            $(this).parent().addClass("has-error");
+            $("#err_msg").html("<strong>Error</strong> Name must be 100 characters or less")
+            $("#err_alert").show()
+            return
         }
+        
         
         // Is the image valid?
         if ($('#image').val() == "") {
-            alert("no image")
+            $(this).parent().addClass("has-error");
+            $("#err_msg").html("<strong>Error</strong> Image must be set")
+            $("#err_alert").show()
             return
         }
         
@@ -105,39 +101,35 @@
         // Are the data-volumes valid?
       
         // Serialize the form to get a request string
-        form = $("#add_task_form").serialize()
+        form = $("#add_job_form").serialize()
           
         // Add the restart value to the request string
-        form += "&rsrt=" + $('#rsrt')[0].checked
+        form += "&restartable=" + $('#restartable')[0].checked
         
         // Add each environment variable to the request string
         $('.env').each(function(i, obj) {
             if ($(obj).find("input")[0].value !== "") {
-                form += "&env=" + $(obj).find("input")[0].value + "=" + $(obj).find("input")[1].value;
+                form += "&environment=" + $(obj).find("input")[0].value + "=" + $(obj).find("input")[1].value;
             }
         });
         
         // Add each data volume to the request string
         $('.dvl').each(function(i, obj) {
             if ($(obj).find("input")[0].value !== "" && $(obj).find("input")[1] !== "") {
-                form += "&dvl=" + $(obj).find("input")[0].value + ":" + $(obj).find("input")[1].value;
+                form += "&datavolumes=" + $(obj).find("input")[0].value + ":" + $(obj).find("input")[1].value;
             }
         });
-        
-        // Add each dependencies to the request string
-        $.each($('#add-dep').pillbox('items'), function(i, dep) {
-            form += "&dep=" + dep.value;
-        });
-        
+
         // Send the request
         xhttp = new XMLHttpRequest();
-        xhttp.open("GET", "add_task?" + form, true);
+        xhttp.open("GET", "update_job?" + form, true);
         xhttp.send();
         
         // TODO: Check the return value to see if we succeeded
         //       If the JSON response shows an error alert the user
         //         do not close the modal if an error occurs
         $('#'+modal).modal('hide');
+        loadTasks()
     }
 </script>
 
@@ -148,30 +140,25 @@
 
 <div class="modal-header">
     <button type="button" class="close" data-dismiss="modal">&times;</button>
-    % if not clone:
-        <h4 class="modal-title">Update a Task</h4>
-    % else:
-        <h4 class="modal-title">Add a Task</h4>
-    % endif
+    <h4 class="modal-title">Update a Job</h4>
 </div>
 
 <div id="modal-body" class="modal-body" style="text-align: center;">
-    <form class="form-horizontal" id="add_task_form" role="form" autocomplete="off">
+    <div id="err_alert" class="alert alert-danger fade in" role="alert">
+        <div id="err_msg"></div>
+    </div>
+    <form class="form-horizontal" id="add_job_form" role="form" autocomplete="off">
         <div class="form-group">
             <div class="col-sm-6">
-                % if not clone:
-                    <input class="form-control" name="id" type="hidden" value="${task.id}">
-                    <input class="form-control" name="name" placeholder="Name" type="text" value="${task.name}">
-                % else:
-                    <input class="form-control" name="name" placeholder="Name" type="text" value="${task.name}-clone">
-                % endif
+                <input class="form-control" id="id" name="id" type="hidden" value="${job.id}">
+                <input class="form-control" id="name" name="name" placeholder="Name" type="text" value="${job.name}">
             </div>
-          
+
             <div class="col-sm-6">
-              <textarea class="form-control autoExpand" name="desc" rows='1' data-max-rows='3' placeholder="Description" style="overflow-x:hidden; resize: none;" value="${task.description.replace('"', "&quot;")}"></textarea>
+              <textarea class="form-control autoExpand" id="description" name="description" rows='1' data-max-rows='3' placeholder="Description" style="overflow-x:hidden; resize: none;">${job.description.replace('"', "&quot;")}</textarea>
             </div>
         </div>
-        <ul id="task_switch" class="nav nav-tabs nav-justified" style="padding-bottom: 10px">
+        <ul id="job_switch" class="nav nav-tabs nav-justified" style="padding-bottom: 10px">
             <li class="active"><a href="#container" data-toggle="tab">Container</a></li>
             <li><a href="#env-pane" data-toggle="tab">Environment</a></li>
             <li><a href="#sch" data-toggle="tab">Scheduling</a></li>
@@ -181,17 +168,17 @@
             <div class="tab-pane active" id="container">
                 <div class="form-group">
                     <label class="control-label col-sm-2">
-                        Image <span class="glyphicon glyphicon-question-sign" style="color: lightgrey" data-toggle="tooltip" data-placement="top" title="The images this task will be ran on. You can use `image` or `image:tag`"></span>
+                        Image <span class="glyphicon glyphicon-question-sign" style="color: lightgrey" data-toggle="tooltip" data-placement="top" title="The image that all tasks within this job will be ran with. You can use `image` or `image:tag`"></span>
                     </label>
-                    <div class="col-sm-10"><input class="form-control" name="image" value="${task.imageuuid}"></div>
+                    <div class="col-sm-10"><input class="form-control" id="image" name="image" value="${job.imageuuid}"></div>
                 </div>
                 <div class="form-group">
                     <label class="control-label col-sm-2">Command</label>
-                    <div class="col-sm-10"><input class="form-control" name="cmd" value="${task.command_raw.replace('"', "&quot;")}"></div>
+                    <div class="col-sm-10"><input class="form-control" id="command" name="command" value="${job.command_raw.replace('"', "&quot;")}"></div>
                 </div>
                 <div class="form-group">
                     <label class="control-label col-sm-2">Entrypoint</label>
-                    <div class="col-sm-10"><input class="form-control" name="etp" value="${task.entrypoint_raw.replace('"', "&quot;")}"></div>
+                    <div class="col-sm-10"><input class="form-control" id="entrypoint" name="entrypoint" value="${job.entrypoint_raw.replace('"', "&quot;")}"></div>
                 </div>
                 <div class="form-group">
                     <label class="control-label col-sm-2 disabled">Working Dir</label>
@@ -214,8 +201,8 @@
                             <span class="glyphicon glyphicon-plus"></span>
                         </button>
                     </span>
-                    <div id="env">
-                        % for env in task.environment_raw:
+                    <div id="environment">
+                        % for env in job.environment_raw:
                             <span class="form-inline col-sm-10 pull-right added env"><span class="pull-left" style="width: 100%">
                                 <input class="input form-control" style="width: 46%" type="text" value="${env[0]}">
                                 <span> = </span>
@@ -233,8 +220,8 @@
                             <span class="glyphicon glyphicon-plus"></span>
                         </button>
                     </span>
-                    <div id="dvl">
-                        % for dvl in task.datavolumes:
+                    <div id="datavolumes">
+                        % for dvl in job.datavolumes:
                             <span class="form-inline col-sm-10 pull-right added dvl"><span class="pull-left" style="width: 100%">
                                 <input class="input form-control" style="width: 46%" type="text" value="${dvl.split(":")[0]}">
                                 <span> : </span>
@@ -252,8 +239,8 @@
                             <span class="glyphicon glyphicon-plus"></span>
                         </button>
                     </span>
-                    <div id="prt">
-                        <span class="form-inline col-sm-5 pull-left added prt"><span class="pull-left" style="width: 100%">
+                    <div id="port">
+                        <span class="form-inline col-sm-5 pull-left added port"><span class="pull-left" style="width: 100%">
                             <input class="disabled input form-control" style="width: 40%" type="text">
                             <span> : </span>
                             <input class="disabled input form-control" style="width: 40%" type="text">
@@ -267,64 +254,38 @@
                 <div class="form-group">
                     <label class="control-label col-sm-2">State</label>
                     <div class="col-sm-10">
-                        % if not clone:
-                            <input disabled class="form-control input" name="state" style="display: inline-block;" value="${task.state}">
-                        % else:
-                            <select class="form-control radio-inline" name="state" style="display: inline-block;" placeholder="queued">
-                                <option value="queued">queue to run now</option>
-                                <option value="waiting">wait until next cron time</option>
-                                <option value="stopped">disable until user intervention</option>
-                            </select>
-                        % endif
-                    </div>
-                </div>
-                <div class="form-group fuelux">
-                    <label class="control-label col-sm-2">Dependencies</label>
-                    <div class="col-sm-10 pillbox pull-right" data-initialize="pillbox" id="add-dep">
-                        <ul class="clearfix pill-group">
-                            % for dep in task.dependencies:
-                                <li data-value="${dep}" class="btn btn-default pill">
-                                    <span>${dep}</span>
-                                    <span class="glyphicon glyphicon-close">
-                                        <span class="sr-only">Remove</span>
-                                    </span>
-                                </li>
-                            % endfor
-                            <li class="pillbox-input-wrap btn-group" id="find-dep">
-                                <input type="text" class="form-control typeahead pillbox-add-item" style="min-width: 240px;" placeholder="start typing to find dependencies">
-                            </li>
-                        </ul>
+                        <input disabled class="form-control input" id="state" name="state" style="display: inline-block;" value="${job.state}">
                     </div>
                 </div>
                 <div class="form-group">
                     <label class="control-label col-sm-2">Cron</label>
-                    <div class="col-sm-10"><input class="form-control" name="cron" value="${task.cron}"></div>
+                    <div class="col-sm-10"><input class="form-control" id="cron" name="cron" value="${job.cron}"></div>
                 </div>
             </div>
             <div class="tab-pane" id="restart">
                 <div class="form-group">
-                    % if task.restartable:
-                        <input type="checkbox" class="checkbox-inline" id="rsrt" checked="true">
+                    % if job.restartable:
+                        <input type="checkbox" class="checkbox-inline" id="restartable" checked="true">
                     % else:
-                        <input type="checkbox" class="checkbox-inline" id="rsrt" value="false">
+                        <input type="checkbox" class="checkbox-inline" id="restartable" value="false">
                     % endif
                     <label class="control-label">Restartable</label>
                 </div>
                 <div class="form-group">
                     <label class="control-label col-sm-2">Recoverable Exit Codes</label>
-                    <div class="col-sm-10"><input class="form-control" name="rec" value="${', '.join(str(rec) for rec in task.recoverable_exitcodes)}"></div>
+                    <div class="col-sm-10"><input class="form-control" id="exitcodes" name="exitcodes" value="${', '.join(str(rec) for rec in job.recoverable_exitcodes)}"></div>
                 </div>
                 <div class="form-group">
                     <label class="control-label col-sm-2">Max Failures</label>
-                    <div class="col-sm-10"><input class="form-control" name="mxf" value="${task.max_failures}"></div>
+                    <div class="col-sm-10"><input class="form-control" id="max_failures" name="max_failures" value="${job.max_failures}"></div>
                 </div>
                 <div class="form-group">
                     <label class="control-label col-sm-2">Inital Delay(min)</label>
-                    <div class="col-sm-10"><input class="form-control" name="idl" value="${task.delay}"></div>
+                    <div class="col-sm-10"><input class="form-control" id="delay" name="delay" value="${job.delay}"></div>
                 </div>
                 <div class="form-group">
                     <label class="control-label col-sm-2">Delay After Failure (min)</label>
-                    <div class="col-sm-10"><input class="form-control" name="daf" value="${task.reschedule_delay}"></div>
+                    <div class="col-sm-10"><input class="form-control" id="faildelay" name="faildelay" value="${job.reschedule_delay}"></div>
                 </div>
             </div>
         </div>
@@ -334,9 +295,5 @@
 <div class="modal-footer" style="width: 100%; text-align:center">
     <button type="button" class="btn btn-default pull-left" style="width: 100px;" data-dismiss="modal">Close</button>
     <button type="button" class="btn btn-default pull-left reset-form" style="width: 100px;">Reset</button>
-    % if not clone:
-        <button type="button" class="btn btn-primary pull-right" style="width: 100px;" onclick="addTask('updateTaskModal')">Update</button>
-    % else:
-        <button type="button" class="btn btn-primary pull-right" style="width: 100px;" onclick="addTask('cloneTaskModal')">Add</button>
-    % endif
+    <button type="button" class="btn btn-primary pull-right" style="width: 100px;" onclick="updateJob('updateTaskModal')">Update</button>
 </div>

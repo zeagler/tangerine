@@ -15,7 +15,7 @@ from time import time
 
 from mako.template import Template
 from mako.lookup import TemplateLookup
-lookup = TemplateLookup(directories=['UI/static'])
+lookup = TemplateLookup(directories=['static'])
 
 class Statuspage(object):
     """Render for the web application"""
@@ -24,7 +24,7 @@ class Statuspage(object):
     def index(self):
         """Main page for Tangerine's web UI"""
         tmpl = lookup.get_template("index.html.mako")
-        if options[USE_AUTH]:
+        if options['USE_AUTH']:
             return tmpl.render(
                                 username = cherrypy.session['username'],
                                 userimageurl = cherrypy.session['userimageurl'],
@@ -130,7 +130,7 @@ class Statuspage(object):
     @cherrypy.expose
     def history(self):
         tmpl = lookup.get_template("history.html.mako")
-        if options[USE_AUTH]:
+        if options['USE_AUTH']:
             return tmpl.render(
                                 username = cherrypy.session['username'],
                                 userimageurl = cherrypy.session['userimageurl'],
@@ -142,7 +142,15 @@ class Statuspage(object):
                                 userimageurl = cherrypy.session.get("userimageurl", "dev"),
                                 usertype = cherrypy.session.get("usertype", "dev")
                               )
-              
+    
+    @cherrypy.expose
+    def get_project(self):
+        if cherrypy.session.get("login_msg", None) == "AJAX not authorized":
+            return '{"redirect": "/login"}'
+          
+        return '{"tasks": ' + API.get_tasks() + ', "jobs": ' + API.get_jobs() + '}'
+        
+    
     @cherrypy.expose
     def get_runs(self, _=None):
         return API.get_runs()
@@ -176,6 +184,11 @@ class Statuspage(object):
     def update_task_form(self, id=None, clone=False):
         tmpl = lookup.get_template("update_task.html.mako")
         return tmpl.render(task = API.get_task_object(id), clone=clone)
+    
+    @cherrypy.expose
+    def update_job_form(self, id=None, clone=False):
+        tmpl = lookup.get_template("update_job.html.mako")
+        return tmpl.render(job = API.get_job_object(id), clone=clone)
       
     @cherrypy.expose
     def new_task_form(self, id=None):
@@ -190,7 +203,14 @@ class Statuspage(object):
     @cherrypy.expose
     def display_task(self, id=None):
         tmpl = lookup.get_template("display_task.html.mako")
-        return tmpl.render(task = API.get_task_object(id))
+        
+        task = API.get_task_object(id)
+        if task.parent_job == None:
+            job = None
+        else:
+            job = API.get_job_object(id=str(task.parent_job))
+            
+        return tmpl.render(task=task, job=job)
 
     @cherrypy.expose
     def display_run(self, id=None):
@@ -201,18 +221,18 @@ class Statuspage(object):
     
     # TODO: Give dvl, env, prt better names
     @cherrypy.expose
-    def add_task(self, id=None, name=None, state=None, dep=None, image=None, cmd=None,
-                etp=None, cron=None, rsrt=None, rec=None, mxf=None, idl=None,
-                daf=None, env=None, dvl=None, prt=None, desc=None):
+    def add_task(self, id=None, name=None, state=None, tag=None, dependency=None, parent_job=None, removed_parent_defaults=None,
+                 image=None, command=None, entrypoint=None, cron=None, restartable=None, exitcodes=None, max_failures=None, delay=None,
+                faildelay=None, environment=None, datavolumes=None, port=None, description=None):
         """ """
         if id:
-            return API.update_task(id=id, name=name, state=state, dep=dep, image=image, cmd=cmd, etp=etp,
-                                  cron=cron, rsrt=rsrt, rec=rec, mxf=mxf, idl=idl, daf=daf,
-                                  env=env, dvl=dvl, prt=prt, desc=desc)
+            return API.update_task(id=id, name=name, state=state, tag=tag, dependency=dependency, parent_job=parent_job, removed_parent_defaults=removed_parent_defaults,
+                                   image=image, command=command, entrypoint=entrypoint, cron=cron, restartable=restartable, exitcodes=exitcodes, max_failures=max_failures, delay=delay, faildelay=faildelay,
+                                   environment=environment, datavolumes=datavolumes, port=port, description=description)
         else:
-            return API.add_task(name=name, state=state, dep=dep, image=image, cmd=cmd, etp=etp,
-                                cron=cron, rsrt=rsrt, rec=rec, mxf=mxf, idl=idl, daf=daf,
-                                env=env, dvl=dvl, prt=prt, desc=desc)
+            return API.add_task(name=name, state=state, tag=tag, dependency=dependency, parent_job=parent_job, removed_parent_defaults=removed_parent_defaults,
+                                image=image, command=command, entrypoint=entrypoint, cron=cron, restartable=restartable, exitcodes=exitcodes, max_failures=max_failures, delay=delay, faildelay=faildelay,
+                                environment=environment, datavolumes=datavolumes, port=port, description=description)
 
     @cherrypy.expose
     def get_task(self, id=None):
@@ -248,6 +268,72 @@ class Statuspage(object):
     @cherrypy.expose
     def queue_task(self, id, username):
         return API.queue_task(id, username)
+      
+    #
+    #
+    # Begin functions for jobs
+    # TODO: Combine the API module with the web_interface module
+    #       
+    #
+    @cherrypy.expose
+    def bulk_add_form(self):
+        tmpl = lookup.get_template("bulk_add_form.html.mako")
+        return tmpl.render()
+      
+    @cherrypy.expose
+    def new_job_form(self, id=None):
+        tmpl = lookup.get_template("new_job.html.mako")
+        return tmpl.render()
+      
+    @cherrypy.expose
+    def get_jobs(self, id=None, name=None, column=None, value=None):
+        return API.get_jobs(id, name, column, value)
+         
+    @cherrypy.expose             
+    def add_job(
+                  self, name=None, description=None, tags=None, state=None, dependencies=None,
+                  parent_job=None, command="", entrypoint="", exitcodes="",
+                  restartable=True, datavolumes=None, environment=None, image=None, cron="",
+                  max_failures=3, delay=0, faildelay=5, port=None, created_by=""
+              ):
+      
+        return API.add_job(
+                            name, description, tags, state, dependencies,
+                            parent_job, command, entrypoint, exitcodes,
+                            restartable, datavolumes, environment, image, cron,
+                            max_failures, delay, faildelay, port, created_by
+                          )
+    
+    @cherrypy.expose
+    def disable_job(self, id=None, name=None, username=None):
+        return API.disable_job(id, name)
+      
+    @cherrypy.expose
+    def delete_job(self, id=None, name=None, username=None, mode=0):
+        return API.delete_job(id, name, username, mode)
+      
+    @cherrypy.expose
+    def queue_job(self, id=None, name=None, username=None, mode=0):
+        return API.queue_job(id, name, username, mode)
+    
+    @cherrypy.expose
+    def stop_job(self, id=None, name=None, username=None):
+        return API.stop_job(id, name, username)
+    
+    @cherrypy.expose
+    def update_job(
+                    self,
+                    id=None, name=None, description="", tags=None, state=None, dependencies=None,
+                    parent_job=None, command="", entrypoint="", exitcodes="",
+                    restartable=True, datavolumes=None, environment=None, image=None, cron="",
+                    max_failures=3, delay=0, faildelay=5, port=None
+                  ):
+        return API.update_job(
+                                id, name, description, tags, state, dependencies, parent_job, command,
+                                entrypoint, exitcodes, restartable, datavolumes, environment, image, cron,
+                                max_failures, delay, faildelay, port
+                              )
+      
       
 def secureheaders():
     headers = cherrypy.response.headers
@@ -330,7 +416,7 @@ def start_web_interface(pg):
     # Define the static path for template rendering
     # Enable this if Nginx proxy is not being used
     #conf = {
-    #    '/static': {'tools.staticdir.on': True, 'tools.staticdir.dir': os.path.abspath(os.getcwd()) + '/UI/static'},
+    #    '/static': {'tools.staticdir.on': True, 'tools.staticdir.dir': os.path.abspath(os.getcwd()) + '/static'},
     #    '/favicon.ico': {'tools.staticfile.on': True, 'tools.staticfile.filename': os.path.abspath(os.getcwd()) + '/UI/static/favicon.ico'}
     #}
     

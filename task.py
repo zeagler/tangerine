@@ -49,6 +49,9 @@ class Task(object):
                 self.environment[i][1] = self.environment[i][1].replace("$$count", str(self.count))
                 self.environment[i][1] = self.environment[i][1].replace("$$date", strftime("%Y%m%d"))
                 self.environment[i][1] = self.environment[i][1].replace("$$time", strftime("%H%M%S"))
+                
+                if self.command:
+                    self.command = self.command.replace("$$" + self.environment[i][0], self.environment[i][1])
 
         # For the web interface
         setattr(self, "dependencies_str", ', '.join(self.dependencies))
@@ -117,21 +120,107 @@ class Task(object):
         #   this task is not waiting on any other task
         if not self.dependencies:
             return False
-
-        completed_dependencies = 0
-        cur = postgres.conn.cursor()
-        cur.execute("SELECT name, state, next_run_time FROM tangerine;")
-        postgres.conn.commit()
-        
-        for task in cur.fetchall():
-            if task[0] in self.dependencies:
-                if task[1] == "success" and (task[2] is None or task[2] > int(time())):
-                    completed_dependencies += 1
-
-        if completed_dependencies == len(self.dependencies):
-            return False
-        else:
+          
+        # Check that a task is not dependent on itself
+        if self.name in self.dependencies:
+            self.warn("Task is dependent on itself")
             return True
+          
+        for tag in self.tags:
+            if "tag:" + tag in self.dependencies:
+                self.warn("Task is dependent on itself by the tag `" + tag + "`")
+                return True
+
+        cur = postgres.conn.cursor()
+
+        # Make a list of the task's dependencies
+        dependencies = ["'" + dep + "'" for dep in self.dependencies if not dep[0:4] == "tag:"]
+        if dependencies:
+            dep_names = " name IN (" + ",".join(dependencies) + ") "
+        else:
+            dep_names = " "
+
+        dep_tags = " OR ".join(["tags @> '{" + tag[4:] + "}' " for tag in self.dependencies if tag[0:4] == "tag:"])
+        if dependencies and dep_tags:
+            query_conditions = dep_names + " OR " + dep_tags
+        elif dependencies:
+            query_conditions = dep_names
+        elif dep_tags:
+            query_conditions = dep_tags
+        else:
+            query_conditions = ""
+
+        # Select the task dependencies
+        query = "SELECT name, state, next_run_time, parent_job, tags FROM tangerine WHERE " + query_conditions + ";"
+        
+        try:
+            cur.execute(query)
+            postgres.conn.commit()
+        except:
+            postgres.conn.rollback()
+            print("Error: error executing query `" + query + "`")
+            return True
+          
+        tasks = cur.fetchall()
+        
+        # Check that the tasks exist
+        if tasks == None or tasks == False:
+            print("Error: Something went wrong getting dependencies for the task '" + self.name + "'\nQuery: `" + query + "`")
+            return True
+        else:
+            dep = [task[0] for task in tasks]
+            missing = [task for task in self.dependencies if task not in dep and not task[0:4] == "tag:"]
+            
+            if missing:
+                self.warn("Task is dependent on tasks that do not exist: " + ",".join(missing))
+                return True
+        
+        is_blocked = False
+        
+        # Loop through the tasks to evaluate their state
+        for task in tasks:
+            # This will catch errors for tasks that are explicitly included as dependencies
+            if not task[3] == self.parent_job:
+                if task[0] in self.dependencies:
+                    # This task was not included by a tag, but an explicit dependency
+                    # The task does not share the same parent, making it an invalid dependency
+                    self.warn("Task is dependent on a task `" + task[0] + "` which does not have the same parent")
+                    return True
+                else:
+                    # This task is included by a tag, but does not share the same parent and should not be evaluated
+                    continue
+
+            if task[1] == "success" and (task[2] is None or task[2] > int(time())):
+                # This task is not blocking execution
+                continue
+              
+            elif task[1] == "failed" or task[1] == "stopped":
+                # This task is blocking execution and the user needs to be warned about it
+                self.warn("Task is dependent on a " + task[1] + " task: " + task[0])
+                return True
+              
+            else:
+                # Any state other than `success` is blocking execution.
+                # This doesn't return immediately because the above condition can still
+                #   warn the user about problems
+                is_blocked = True
+        
+        # If the previous loop finished there were no warnings for blocked tasks
+        self.warn(None)
+        return is_blocked
+
+    def warn(self, warning_message=None):
+        if warning_message == None:
+            if self.warning:
+                self.update("warning", "false")
+                self.update("warning_message", "")
+        
+        elif warning_message == self.warning_message:
+            return
+        else:
+            print("Warning: '" + self.name + "' - " +  warning_message)
+            self.update("warning", "true")
+            self.update("warning_message", warning_message)
 
     def queue(self, cause, username=None):
         """
@@ -160,8 +249,8 @@ class Task(object):
             self.update("failures", 0)
 
             if self.state == "running":
-                self.stop()
                 self.update("next_state", "queued")
+                self.stop()
                 
             elif self.state == "stopping":
                 self.update("next_state", "queued")
@@ -171,10 +260,12 @@ class Task(object):
 
     def ready(self):
         """Go through the process to mark a task as ready"""
+        self.warn(None)
         self.update("state", "ready")
 
     def starting(self):
         """Go through the process to mark a task as starting"""
+        self.warn(None)
         self.update("state", "starting")
 
     def running(self, run_id, agent_id):
@@ -182,6 +273,7 @@ class Task(object):
         Go through the process to mark a task as running
         Create an entry in the task_history table
         """
+        self.warn(None)
         self.update("run_id", run_id)
         self.update("count", self.count + 1)
         self.set_last_run_time()
@@ -193,12 +285,14 @@ class Task(object):
     def success(self):
         """Go through the process to mark a task as success"""
         if self.cron: self.set_next_run_time()
+        self.warn(None)
         self.update("run_id", "")
         self.set_last_success_time()
         self.update("state", "success")
         
     def failed(self):
         """Go through the process to mark a task as failed"""
+        self.warn(None)
         self.update("run_id", "")
         self.update("failures", self.failures+1)
         self.set_last_fail_time()
@@ -206,6 +300,7 @@ class Task(object):
         
     def stop(self):
         """Go through the process of stopping a task"""
+        self.warn(None)
         if self.state == "running":
             self.update("state", "stopping")
         else:
@@ -217,6 +312,10 @@ class Task(object):
 
     def set_next_run_time(self, cron=None):
         """Use croniter to generate the next run time based on the cron schedule"""
+        
+        # If this is a child of another entity, it follows the parent's cron schedule
+        if not self.parent_job == None:
+            return
         
         # Check twice, first set cron if it wasn't user-defined, then check if it is still empty
         if not cron:
@@ -253,6 +352,10 @@ class Task(object):
     def check_next_run_time(self):
         """Check if the next run time has passed, queue the task if it has"""
 
+        # If this is a child of another entity, it follows the parent's cron schedule
+        if not self.parent_job == None:
+            return False
+          
          # Set the next run time if cron is set but the next run time is blank
         if not self.next_run_time:
             if self.cron:
@@ -279,11 +382,37 @@ class Task(object):
             self.update("state", "disabled")
             self.update("disabled_time", int(time()))
             
+    def delete(self):
+        """
+        Delete the task.
+        """
+        if self.state == "running":
+            self.update("state", "deleting")
+        else:
+            global postgres
+            query = "DELETE FROM tangerine WHERE id=" + str(self.id) + ";"
+            cur = postgres.conn.cursor()
+            
+            print(query)
+            
+            try:
+                cur.execute(query)
+                postgres.conn.commit()
+                
+            except:
+                print "Could not delete task #" + str(self.id)
+                postgres.conn.rollback()
+            
     def create_run(self, run_id, agent_id):
         global postgres
+        
+        # TODO: group runs with the parent
+        #If this is a child of another entity, it shares a run with the parent
+        #if not self.parent_job == None:
+        #    return "child"
 
         query = "INSERT INTO task_history (" + \
-                "run_id, task_id, name, description, dependencies, dependencies_str, command, entrypoint" + \
+                "run_id, task_id, name, description, tags, dependencies, dependencies_str, command, entrypoint" + \
                 ", recoverable_exitcodes, restartable, datavolumes" + \
                 ", environment, imageuuid, cron, queued_by, agent_id, run_start_time, run_start_time_str, log" + \
                 ") VALUES (" + \
@@ -291,6 +420,7 @@ class Task(object):
                 ", " + str(self.id) + \
                 ", '" + self.name + \
                 "', '" + self.description.replace("'","''") + \
+                "', '" + "{" + ', '.join(self.tags) + "}" + \
                 "', '" + "{" + ', '.join(self.dependencies) + "}" + \
                 "', '" + ', '.join(self.dependencies) + \
                 "', '" + self.command.replace("'","''") + \
@@ -314,6 +444,7 @@ class Task(object):
             postgres.conn.commit()
             
         except:
+            print "Error running query: " + query
             print "Could not create an entry for run #" + str(run_id)
             postgres.conn.rollback()
             

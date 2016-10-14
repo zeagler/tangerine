@@ -15,13 +15,11 @@ import settings
 from agent_server import agent_server
 from central_server import central_server
 from postgres_functions import Postgres
-from UI.web_interface import start_web_interface
+from web_interface import start_web_interface
 
 if __name__ == '__main__':
     print "Starting Tangerine"
     print "  postgreSQL table: " + settings.Postgresql['TASK_TABLE']
-    print "      Rancher Host: " + settings.Rancher['CATTLE_URL']
-    print "     Rancher stack: " + settings.Rancher['TASK_STACK']
     print "     Slack webhook: " + settings.Slack['SLACK_WEBHOOK']
     print "Spot Fleet Request: " + settings.Amazon['SPOT_FLEET_REQUEST_ID']
     

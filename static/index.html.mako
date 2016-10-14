@@ -14,7 +14,6 @@
         <!-- Patternfly -->
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/patternfly/3.8.1/css/patternfly.min.css">
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/patternfly/3.8.1/css/patternfly-additions.min.css">
-        <script src="https://cdnjs.cloudflare.com/ajax/libs/patternfly/3.8.1/js/patternfly.min.js"></script>
 
         <!-- Bootstrap Cerulean Theme -->
         <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootswatch/3.3.6/cerulean/bootstrap.min.css">
@@ -32,7 +31,7 @@
         
         <script>
             $(document).ready(function(e) {
-                loadTasks(); // This will load tasks on page load
+                set_job(null);// This will set the job and load tasks
 
                 setInterval(function(){  // this will update tasks every 5 seconds
                     loadTasks()
@@ -71,7 +70,15 @@
                 <div class="panel-heading">
                     <button id="addTask" class="btn icon-btn btn-success" data-toggle="modal" onclick="addTaskModal()">
                         <span class="glyphicon btn-glyphicon glyphicon-plus img-circle text-success"></span>
-                        Add
+                        Add Task
+                    </button>
+                    <button id="addJob" class="btn icon-btn btn-success" data-toggle="modal" onclick="addJobModal()" style="margin-left: 10px">
+                        <span class="glyphicon btn-glyphicon glyphicon-plus img-circle text-success"></span>
+                        Add Job
+                    </button>
+                    <button id="addBulk" class="btn icon-btn btn-success" data-toggle="modal" onclick="addBulkModal()" style="margin-left: 10px">
+                        <span class="glyphicon btn-glyphicon glyphicon-upload img-circle text-success"></span>
+                        Bulk Add
                     </button>
                     <div id="find-task" class="col-xs-2 pull-right">
                         <input class="form-control typeahead" id="searchTasks" type="text" placeholder="search">
@@ -91,13 +98,21 @@
                 </div>
                     
                 <div class="panel-body">
-                    <div id="tasks" class="container">
-                    </div>
+                    <div id="job_panel" class="container"></div>
+                    <div id="tasks" class="container"></div>
                 </div>
             </div>
         </div>
         
         <!-- Modals -->
+        <div class="modal fade" id="jobModal" role="dialog">
+            <div class="modal-dialog modal-md">
+                <div id="display-job-modal-content" class="modal-content">
+                    <!-- Filled in with javascipt -->
+                </div>
+            </div>
+        </div>
+        
         <div class="modal fade" id="displayTaskModal" role="dialog">
             <div class="modal-dialog modal-lg">
                 <div id="display-task-modal-content" class="modal-content">

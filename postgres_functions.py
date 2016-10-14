@@ -26,6 +26,9 @@ class Postgres():
 
         cur.execute("select column_name from information_schema.columns where table_name='tangerine';")
         setattr(self, "columns", cur.fetchall())
+
+        cur.execute("select column_name from information_schema.columns where table_name='jobs';")
+        setattr(self, "job_columns", cur.fetchall())
         
         cur.execute("select column_name from information_schema.columns where table_name='authorized_users';")
         setattr(self, "user_columns", cur.fetchall())
@@ -35,6 +38,9 @@ class Postgres():
         
         cur.execute("select column_name from information_schema.columns where table_name='agents';")
         setattr(self, "agent_columns", cur.fetchall())
+        
+        cur.execute("select column_name from information_schema.columns where table_name='host_configurations';")
+        setattr(self, "host_configuration_columns", cur.fetchall())
         
         self.conn.commit()
     
@@ -47,6 +53,7 @@ class Postgres():
             return cur
         except:
             self.conn.rollback()
+            print("Error: error executing query `" + query + "`")
             return False
         
     #
@@ -86,15 +93,18 @@ class Postgres():
         elif value == None:
             cur.execute("SELECT * FROM tangerine WHERE "+column+"='NULL';")
         else:
-            cur.execute("SELECT * FROM tangerine WHERE "+column+"='"+value+"';")
+            cur.execute("SELECT * FROM tangerine WHERE "+column+"='"+str(value)+"';")
         
         self.conn.commit()
         return [Task(self.columns, task) for task in cur.fetchall()]
 
-    def add_task(self, name, state, dependencies, image, command, entrypoint, cron,
+    def add_task(self, name, state, tags, dependencies, parent_job, removed_parent_defaults, image, command, entrypoint, cron,
                  restartable, exitcodes, max_failures, delay, faildelay,
                  environment, datavolumes, port, description):
         """Insert a task into the table"""
+        
+        # TODO: check that the parent exists
+            
         # TODO: check input for validity
         if not name:
             return {"error": "Name can not be blank"}
@@ -103,23 +113,26 @@ class Postgres():
 
         if not (state == "queued" or state == "waiting" or state == "stopped"):
             return {"error": "Requested state is not valid"}
-
-        if not image:
-            return {"error": "Image can not be blank"}
+      
+        # Check if the image is proper. A blank image is only valid if the task has a parent
+        if image == None:
+            if parent_job == None:
+                return {"error": "Image can not be blank"}
         elif " " in image:
             return {"error": "Image can not contain a space"}
           
-        # TODO: Check dependencies, give a warning if one doesn't exist
+        # TODO: Check dependencies, give a warning if one doesn't exist.
+        #       This can be done client side.
 
         # Parse enviroment, datavolumes, ports, and dependencies     
         if environment:
             if type(environment) is list:
-                env = ['{"' + e.split("=")[0] + '","' + e.split("=")[1].replace("'", "''") + '"}' for e in environment]
+                env = ['{"' + e.split("=")[0] + '","' + e.split("=", 1)[1].replace("'", "''") + '"}' for e in environment]
                 env = ", ".join(env);
             else:
-                env = '{"' + environment.split("=")[0] + '","' + environment.split("=")[1].replace("'", "''") + '"}'
+                env = '{"' + environment.split("=")[0] + '","' + environment.split("=", 1)[1].replace("'", "''") + '"}'
         else:
-            env = ""
+            env = None
         
         if datavolumes:
             if type(datavolumes) is list:
@@ -127,7 +140,7 @@ class Postgres():
             else:
                 dvl = datavolumes
         else:
-            dvl = ""
+            dvl = None
         
         if dependencies:
             if type(dependencies) is list:
@@ -135,14 +148,49 @@ class Postgres():
             else:
                 dep = dependencies
         else:
-            dep = ""
-
-        query = "INSERT INTO tangerine (id, name, description, state, dependencies, imageuuid, command, entrypoint, " + \
-                                       "cron, restartable, recoverable_exitcodes, max_failures, delay, " + \
-                                       "reschedule_delay, environment, datavolumes) " + \
-                "VALUES (DEFAULT, '"+name+"','"+description.replace("'","''")+"','"+state+"','{"+dep+"}','"+image+"','"+command.replace("'", "''")+"','"+entrypoint.replace("'", "''")+"'," + \
-                "'"+cron+"',"+restartable+",'{"+exitcodes+"}','"+max_failures+"','"+delay+"','"+faildelay+"','{"+env+"}','{"+dvl+"}');"
+            dep = None
+            
+        if tags:
+            if type(tags) is list:
+                tag = ", ".join(tags)
+            else:
+                tag = tags
+        else:
+            tag = None
+            
+        if removed_parent_defaults:
+            if type(removed_parent_defaults) is list:
+                removed = ", ".join(removed_parent_defaults)
+            else:
+                removed = removed_parent_defaults
+        else:
+            removed = None
         
+        columns = {}
+        
+        columns["name"] = name
+        columns["state"] = state
+        
+        if not tag == None:          columns["tags"]                    = "{"+tag+"}"
+        if not dep == None:          columns["dependencies"]            = "{"+dep+"}"
+        if not parent_job == None:   columns["parent_job"]              = str(parent_job)
+        if not removed == None:      columns["removed_parent_defaults"] = "{"+removed+"}"
+        if not image == None:        columns["imageuuid"]               = image
+        if not command == None:      columns["command"]                 = command.replace("'","''")
+        if not entrypoint == None:   columns["entrypoint"]              = entrypoint.replace("'","''")
+        if not cron == None:         columns["cron"]                    = cron
+        if not restartable == None:  columns["restartable"]             = restartable
+        if not exitcodes == None:    columns["recoverable_exitcodes"]   = "{"+exitcodes+"}"
+        if not max_failures == None: columns["max_failures"]            = max_failures
+        if not delay == None:        columns["delay"]                   = delay
+        if not faildelay == None:    columns["reschedule_delay"]        = faildelay
+        if not env == None:          columns["environment"]             = "{"+env+"}"
+        if not dvl == None:          columns["datavolumes"]             = "{"+dvl+"}"
+        if not port == None:         columns["port"]                    = port
+        if not description == None:  columns["description"]             = description.replace("'","''")
+
+        query = "INSERT INTO tangerine (" + ", ".join(columns.keys())  + ") VALUES (" + ", ".join("'" + val + "'" for val in columns.values()) + ")"
+
         if self.execute(query):            
             # check that the row was entered
             task = self.get_task(name=name)
@@ -153,7 +201,7 @@ class Postgres():
 
         return {"error": "Could not add task"}
 
-    def update_task(self, id, name, state, dependencies, image, command, entrypoint, cron,
+    def update_task(self, id, name, state, tags, dependencies, parent_job, removed_parent_defaults, image, command, entrypoint, cron,
                     restartable, exitcodes, max_failures, delay, faildelay,
                     environment, datavolumes, port, description):
         """Insert a task into the table"""
@@ -170,19 +218,26 @@ class Postgres():
                 return {"error": "Name conflicts with another task"}
 
         if not image:
-            return {"error": "Image can not be blank"}
+            if parent_job == None:
+                return {"error": "Image can not be blank"}
         elif " " in image:
             return {"error": "Image can not contain a space"}
           
         # TODO: Check dependencies, give a warning if one doesn't exist
+        
+        if parent_job == None:
+            parent = "NULL"
+        else:
+            # TODO: check that the parent exists
+            parent = str(parent_job)
 
         # Parse enviroment, datavolumes, ports, and dependencies     
         if environment:
             if type(environment) is list:
-                env = ['{"' + e.split("=")[0] + '","' + e.split("=")[1].replace("'", "''") + '"}' for e in environment]
+                env = ['{"' + e.split("=")[0] + '","' + e.split("=", 1)[1].replace("'", "''") + '"}' for e in environment]
                 env = ", ".join(env);
             else:
-                env = '{"' + environment.split("=")[0] + '","' + environment.split("=")[1].replace("'", "''") + '"}'
+                env = '{"' + environment.split("=")[0] + '","' + environment.split("=", 1)[1].replace("'", "''") + '"}'
         else:
             env = ""
         
@@ -202,26 +257,47 @@ class Postgres():
         else:
             dep = ""
             
-        query = "UPDATE tangerine SET " + \
-                "name='" + name + \
-                "', description='" + description.replace("'","''") + \
-                "', dependencies='{" + dep + \
-                "}', imageuuid='" + image + \
-                "', command='" + command.replace("'", "''") + \
-                "', entrypoint='" + entrypoint.replace("'", "''") + \
-                "', cron='" + cron + \
-                "', restartable=" + restartable + \
-                ", recoverable_exitcodes='{" + exitcodes + \
-                "}', max_failures='" + max_failures + \
-                "', delay='" + delay + \
-                "', reschedule_delay='" + faildelay + \
-                "', environment='{" + env + \
-                "}', datavolumes='{" + dvl + \
-                "}' WHERE id="+str(id)+";"
-
+        if tags:
+            if type(tags) is list:
+                tag = ", ".join(tags)
+            else:
+                tag = tags
+        else:
+            tag = ""
+            
+        if removed_parent_defaults:
+            if type(removed_parent_defaults) is list:
+                removed = ", ".join(removed_parent_defaults)
+            else:
+                removed = removed_parent_defaults
+        else:
+            removed = ""
+       
+        query = "UPDATE tangerine SET "
+        query += "name='" + name + "'"
+        
+        if not tag == None:          query += ", tags='{" + tag + "}'"
+        if not dep == None:          query += ", dependencies='{" + dep + "}'"
+        if not parent_job == None:   query += ", parent_job='" + str(parent_job) + "'"
+        if not removed == None:      query += ", removed_parent_defaults='{" + removed + "}'"
+        if not image == None:        query += ", imageuuid='" + image + "'"
+        if not command == None:      query += ", command='" + command.replace("'", "''") + "'"
+        if not entrypoint == None:   query += ", entrypoint='" + entrypoint.replace("'", "''") + "'"
+        if not cron == None:         query += ", cron='" + cron + "'"
+        if not restartable == None:  query += ", restartable='" + restartable + "'"
+        if not exitcodes == None:    query += ", recoverable_exitcodes='{" + exitcodes + "}'"
+        if not max_failures == None: query += ", max_failures='" + max_failures + "'"
+        if not delay == None:        query += ", delay='" + delay + "'"
+        if not faildelay == None:    query += ", reschedule_delay='" + faildelay + "'"
+        if not env == None:          query += ", environment='{" + env + "}'"
+        if not dvl == None:          query += ", datavolumes='{" + dvl + "}'"
+        if not description == None:  query += ", description='" + description.replace("'","''") + "'"
+        
+        query += " WHERE id="+str(id)+";"
+        
         if self.execute(query):            
             # check that the row was entered
-            task = self.get_task(name=name)
+            task = self.get_task(id=id)
             task.initialize()
             return task.__dict__
 
@@ -255,8 +331,13 @@ class Postgres():
         if not queue:
             return False
         elif queue == "ready_queue":
+            table = "tangerine"
             condition = " WHERE state='ready';"
+        elif queue == "job_queue":
+            table = "jobs"
+            condition = ""
         else:
+            table = "tangerine"
             condition = ""
         
         cur = self.conn.cursor()
@@ -268,14 +349,14 @@ class Postgres():
         if cur.fetchone()[0]:
             self.conn.rollback()
         else:
-            cur.execute("SELECT COUNT(id) FROM tangerine" + condition + ";")
+            cur.execute("SELECT COUNT(id) FROM " + table + condition + ";")
 
             # If the task table is empty return nothing
             if not cur.fetchone()[0]:
                 self.conn.commit()
                 return
             
-            cur.execute("SELECT id FROM tangerine" + condition + ";")
+            cur.execute("SELECT id FROM " + table + condition + ";")
             ids = ("(" + str(id[0]) + ")" for id in cur.fetchall())
             cur.execute("INSERT INTO " + queue + " VALUES " + ", ".join(ids) + ";")
             self.conn.commit()

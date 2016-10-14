@@ -17,6 +17,11 @@ def check_tables(postgres_connection):
     cur.execute("select exists(select * from information_schema.tables where table_name='tangerine')")
     if not cur.fetchone()[0]:
         create_task_table(postgres_connection)
+    
+    # Check if task table exists, create it if it does not
+    cur.execute("select exists(select * from information_schema.tables where table_name='jobs')")
+    if not cur.fetchone()[0]:
+        create_job_table(postgres_connection)
 
     # Check if the authorized user table exists, create it if it does not
     cur.execute("select exists(select * from information_schema.tables where table_name='authorized_users')")
@@ -32,6 +37,11 @@ def check_tables(postgres_connection):
     cur.execute("select exists(select * from information_schema.tables where table_name='ready_queue')")
     if not cur.fetchone()[0]:
         create_ready_queue(postgres_connection)
+
+    # Check if the job queue exists, create it if it does not
+    cur.execute("select exists(select * from information_schema.tables where table_name='job_queue')")
+    if not cur.fetchone()[0]:
+        create_job_queue(postgres_connection)
 
     # Check if the task history table exists, create it if it does not
     cur.execute("select exists(select * from information_schema.tables where table_name='task_history')")
@@ -49,18 +59,70 @@ def check_tables(postgres_connection):
 #
 # Create tables
 # TODO: functions to modify table columns when needed
+# TODO: Change the name to tasks
+# TODO: Change the dependencies to use the task id
 #
 def create_task_table(postgres_connection):
     """Create the table to track tasks"""
     cur = postgres_connection.cursor()
-    cursor.execute("""
+    cur.execute("""
     CREATE TABLE tangerine (
         id                       serial        PRIMARY KEY,
         name                     varchar(100)  NOT NULL UNIQUE,
-        description              varchar,
+        description              varchar       NOT NULL DEFAULT '',
+        tags                     varchar[]     NOT NULL DEFAULT '{}',
         state                    varchar(10)   NOT NULL DEFAULT 'queued',
         next_state               varchar(10),
         dependencies             varchar[]     NOT NULL DEFAULT '{}',
+        parent_job               integer,
+        removed_parent_defaults  varchar[]     NOT NULL DEFAULT '{}',
+        command                  varchar       NOT NULL DEFAULT '',
+        entrypoint               varchar       NOT NULL DEFAULT '',
+        recoverable_exitcodes    integer[]     NOT NULL DEFAULT '{}',
+        restartable              boolean       NOT NULL DEFAULT true,
+        datavolumes              varchar[]     NOT NULL DEFAULT '{}',
+        environment              varchar[][2]  NOT NULL DEFAULT '{}',
+        imageuuid                varchar       NOT NULL DEFAULT '',
+        cron                     varchar(100)  NOT NULL DEFAULT '',
+        next_run_time            integer,
+        last_run_time            integer,
+        last_success_time        integer,
+        last_fail_time           integer,
+        creation_time            integer,
+        last_modified_time       integer,
+        failures                 integer       NOT NULL DEFAULT 0,
+        max_failures             integer       NOT NULL DEFAULT 3,
+        queued_by                varchar       NOT NULL DEFAULT '',
+        created_by               varchar       NOT NULL DEFAULT '',
+        warning                  boolean       NOT NULL DEFAULT false,
+        warning_message          varchar       NOT NULL DEFAULT '',
+        service_id               varchar(10)   NOT NULL DEFAULT '',
+        run_id                   integer,
+        count                    integer       NOT NULL DEFAULT 0,
+        delay                    integer       NOT NULL DEFAULT 0,
+        reschedule_delay         integer       NOT NULL DEFAULT 5,
+        disabled_time            integer
+    );""")
+    postgres_connection.commit()
+
+def create_job_table(postgres_connection):
+    """
+    Create the table to track jobs
+    
+    A job entry consists of the default configuration for tasks, and a list of tasks
+      that the job is responsible for.
+    """
+    cur = postgres_connection.cursor()
+    cur.execute("""
+    CREATE TABLE jobs (
+        id                       serial        PRIMARY KEY,
+        name                     varchar(100)  NOT NULL UNIQUE,
+        description              varchar       NOT NULL DEFAULT '',
+        tags                     varchar[]     NOT NULL DEFAULT '{}',
+        state                    varchar(10)   NOT NULL DEFAULT 'stopped',
+        next_state               varchar(10),
+        dependencies             varchar[]     NOT NULL DEFAULT '{}',
+        parent_job               integer,
         command                  varchar       NOT NULL DEFAULT '',
         entrypoint               varchar       NOT NULL DEFAULT '',
         recoverable_exitcodes    integer[]     NOT NULL DEFAULT '{}',
@@ -78,6 +140,9 @@ def create_task_table(postgres_connection):
         failures                 integer       NOT NULL DEFAULT 0,
         max_failures             integer       NOT NULL DEFAULT 3,
         queued_by                varchar       NOT NULL DEFAULT '',
+        created_by               varchar       NOT NULL DEFAULT '',
+        warning                  boolean       NOT NULL DEFAULT false,
+        warning_message          varchar       NOT NULL DEFAULT '',
         service_id               varchar(10)   NOT NULL DEFAULT '',
         run_id                   integer,
         count                    integer       NOT NULL DEFAULT 0,
@@ -107,6 +172,15 @@ def create_task_queue(postgres_connection):
     );""")
     postgres_connection.commit()
 
+def create_job_queue(postgres_connection):
+    """Create the table to be used as a queue for tangerine in HA"""
+    cur = postgres_connection.cursor()
+    cur.execute("""
+    CREATE TABLE job_queue (
+        id integer
+    );""")
+    postgres_connection.commit()
+
 def create_ready_queue(postgres_connection):
     """Create the table to be used as a queue for tangerine in HA"""
     cur = postgres_connection.cursor()
@@ -124,7 +198,8 @@ def create_task_history_table(postgres_connection):
         run_id                   serial        PRIMARY KEY,
         task_id                  integer       NOT NULL,
         name                     varchar(100)  NOT NULL,
-        description              varchar,
+        description              varchar       NOT NULL DEFAULT '',
+        tags                     varchar[]     NOT NULL DEFAULT '{}',
         result_state             varchar(10),
         result_exitcode          integer,
         dependencies             varchar[]     NOT NULL,
@@ -167,10 +242,7 @@ def create_options_table(postgres_connection):
     # TODO add docker registry options
     #
     # TODO any sensitive information needs to be secured:
-    #   create a 32bit salt 
-    #   concatanate the salt and information
-    #   hash the combined string with SHA256
-    #   save salt and hash to the database
+    #   AES 256 bit encrytion with some secret key.
     #
     cur = postgres_connection.cursor()
     cur.execute("""
