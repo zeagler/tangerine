@@ -330,7 +330,7 @@ function delete_job(id) {
     set_job(null)
     username = $($("#nav_user")[0]).find('img')[0].alt
     xhttp = new XMLHttpRequest();
-    xhttp.open("GET", "delete_job?id="+id+"&username="+username+"&mode="+$('#deleteTasks:checked').length, true);
+    xhttp.open("GET", "delete_job?id="+id+"&username="+username+"&mode=1", true);
     xhttp.send();
 }
 
@@ -396,8 +396,9 @@ function displayJobDanger(id, name) {
 
         '<div class="modal-body">' +
             '<div class="text-center">' +
-                '<input type="checkbox" id="deleteTasks" value="delete"> Delete Children? <span class="glyphicon glyphicon-question-sign" style="color: darkgrey" data-toggle="tooltip" data-placement="top" title="If this is checked all child tasks will be deleted. If this is not checked, child tasks will be moved to the root."></span>' +
-                '<br><br>' +
+                // '<input type="checkbox" id="deleteTasks" value="delete"> Delete Children? <span class="glyphicon glyphicon-question-sign" style="color: darkgrey" data-toggle="tooltip" data-placement="top" title="If this is checked all child tasks will be deleted. If this is not checked, child tasks will be moved to the root."></span>' +
+                '<p>This will delete the job and all tasks contained in the job.</p>' + 
+                '<br>' +
                 '<button class="btn btn-default" class="close" data-dismiss="modal" style="margin-right: 20px;">Cancel</button>' +
                 '<button class="btn btn-danger" class="close" data-dismiss="modal" onclick="delete_job(' + id + ')">Delete Job</button>' +
             '</div>' +

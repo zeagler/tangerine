@@ -26,7 +26,7 @@ def get_log(log_name, lines=200):
         return log
     except Exception as e:
         print('{!r}; error trying to read log'.format(e))
-        return False
+        return None
     
 
 class Docker(object):
@@ -34,7 +34,7 @@ class Docker(object):
         """
         Connect to the docker daemon
         """
-        setattr(self, "docker", Client(base_url='unix://var/run/docker.sock', timeout=10))
+        setattr(self, "docker", Client(base_url='unix://var/run/docker.sock', timeout=10, version='auto'))
         setattr(self, "containers", [])
     
     def start_task(self, task, run_id):
@@ -175,7 +175,7 @@ class Docker(object):
         """ """
         try:
             f = open(options["log_directory"] + "/" + log_name + ".log", "w")
-            Popen(["docker", "logs", "-f", containerId], stdout=f, stderr=f)
+            Popen(["docker", "logs", "-f", str(containerId)], stdout=f, stderr=f)
         except Exception as e:
             print('{!r}; error trying to record log'.format(e))
     

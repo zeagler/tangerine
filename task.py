@@ -97,7 +97,7 @@ class Task(object):
         
         cur = postgres.conn.cursor()
         try:
-            cur.execute(query + " WHERE name='"+str(self.name)+"';")
+            cur.execute(query + " WHERE id='"+str(self.id)+"';")
             postgres.conn.commit()
             return True
         except:
@@ -142,13 +142,16 @@ class Task(object):
 
         dep_tags = " OR ".join(["tags @> '{" + tag[4:] + "}' " for tag in self.dependencies if tag[0:4] == "tag:"])
         if dependencies and dep_tags:
-            query_conditions = dep_names + " OR " + dep_tags
+            query_conditions = "(" + dep_names + " OR " + dep_tags + ")"
         elif dependencies:
-            query_conditions = dep_names
+            query_conditions = "(" + dep_names + ")"
         elif dep_tags:
-            query_conditions = dep_tags
+            query_conditions = "(" + dep_tags + ")"
         else:
             query_conditions = ""
+            
+        if self.parent_job:
+            query_conditions += " AND parent_job=" + str(self.parent_job)
 
         # Select the task dependencies
         query = "SELECT name, state, next_run_time, parent_job, tags FROM tangerine WHERE " + query_conditions + ";"
@@ -172,7 +175,7 @@ class Task(object):
             missing = [task for task in self.dependencies if task not in dep and not task[0:4] == "tag:"]
             
             if missing:
-                self.warn("Task is dependent on tasks that do not exist: " + ",".join(missing))
+                self.warn("Task is dependent on tasks that do not exist in the same job: " + ",".join(missing))
                 return True
         
         is_blocked = False
@@ -435,7 +438,7 @@ class Task(object):
                 "', '" + str(agent_id) + \
                 "', '" + str(self.last_run_time) + \
                 "', '" + datetime.fromtimestamp(self.last_run_time).strftime('%I:%M%p %B %d, %Y') + \
-                "', '" + self.name + "-" + str(run_id) + ".log" + \
+                "', '" + self.name.translate(None, '~`!@#$%^&*()_+{}|[]\\:";\'<>?,./= ') + "-" + str(run_id) + ".log" + \
                 "');"
 
         cur = postgres.conn.cursor()

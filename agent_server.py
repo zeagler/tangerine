@@ -30,6 +30,8 @@ def start_task(task, job=None):
     
     # Set fields inherited from the parent
     if not job == None:
+        task.name = job.name + "_" + task.name
+      
         if task.command == '':
             task.command = job.command_raw
             task.command = task.command.replace("$$count", str(task.count))
@@ -89,7 +91,7 @@ def start_task(task, job=None):
             # Add the parent's environment variable if the above conditions are not applicable
             else:
                 task.datavolumes.append(dvl)
-    
+
     # Reserve the next run_id
     run_id = postgres.reserve_next_run_id();
     agent.update_run(run_id)

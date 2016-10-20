@@ -138,8 +138,6 @@
                         if (typeof(config.jobs[i].tasks[j].name) == 'undefined') {
                             console.log('{"error": "All tasks need a name. Check tasks in the job `' + config.jobs[i].name + '`"}')
                             return JSON.parse('{"error": "All tasks need a name. Check tasks in the job `' + config.jobs[i].name + '`"}')
-                        } else {
-                            $config_task_names.push(config.jobs[i].tasks[j].name)
                         }
                     }
                 }
@@ -402,13 +400,24 @@
     }
     
     function check_for_task_conflicts(name, work_id) {
-        // Check if the name is already used
-        if (name_in_object_array(name, getTasks())) {
+        // Check if the name of a task is repeated
+        // If the name is repeated the other task must have a parent
+        if ($.grep(getTasks(), function(obj) {
+                    return (obj.name == name && obj.parent_job == null);
+                }).length) {
             $("#status-" + work_id).addClass("fa-times-circle-o").css({"color": "red"});
             add_tooltip("tooltip-" + work_id, "A task already exists with this name");
         } else if (name_in_array(name, $config_task_names) != 1) {
             $("#status-" + work_id).addClass("fa-times-circle-o").css({"color": "red"});
             add_tooltip("tooltip-" + work_id, "The name of this task is duplicated in the configuration");
+        }
+    }
+    
+    function check_for_task_child_conflicts(name, tasks, work_id) {
+        // Check if the name is repeated in the job
+        if (name_in_object_array(name, tasks) != 1) {
+            $("#status-" + work_id).addClass("fa-times-circle-o").css({"color": "red"});
+            add_tooltip("tooltip-" + work_id, "The name of this task is duplicated in the job");
         }
     }
     
@@ -419,10 +428,6 @@
         $("#add_config").removeClass("hidden")
         
         $("#add-container").html("")
-        
-        // <span class="fa fa-spinner fa-spin"/>
-        // <span class="fa fa-check-circle-o" style="color: green"/>
-        // <span class="fa fa-times-circle-o" style="color: red"/>
 
         // First build the status page for adding the tasks
         $.each($config_arr, function(i, work) {
@@ -432,7 +437,7 @@
                 
                 $.each(work.tasks, function(j, task) {
                     $("#children-add-job" + i).append(build_html_adding("add-job" + i + "task" + j, task))
-                    check_for_task_conflicts(task.name, "add-job" + i + "task" + j)
+                    check_for_task_child_conflicts(task.name, work.tasks, "add-job" + i + "task" + j)
                 })
             } else if (work.type == "task") {
                 $("#add-container").append(build_html_adding("add-task" + i, work))
@@ -442,8 +447,9 @@
 
         $('[data-toggle="tooltip"]').tooltip();
         
-        if ($(".fa-times-circle-o").length == 0)
+        if ($(".fa-times-circle-o").length == 0) {
             startAdd()
+        }
     }
     
     $cant_close = 0
@@ -551,8 +557,9 @@
     }
     
     function startAdd() {
-        if ($(".fa-times-circle-o").length)
+        if ($(".fa-times-circle-o").length > 0) {
             return
+        }
         
         $("#back-btn").addClass("hidden")
         $("#close-btn").addClass("disabled")
@@ -587,11 +594,11 @@
                             var child_work_id = "add-job" + i + "task" + j
                             
                             if (typeof(child_json.error) != 'undefined') {
-                                $("#status-" + work_id).addClass("fa-times-circle-o").removeClass("fa-spinner fa-spin").css({"color": "red"});
+                                $("#status-" + child_work_id).addClass("fa-times-circle-o").removeClass("fa-spinner fa-spin").css({"color": "red"});
                                 add_tooltip("tooltip-" + child_work_id, child_json.error);
                                 return true;
                             } else if (typeof(child_json.id) == 'undefined') {
-                                $("#status-" + work_id).addClass("fa-times-circle-o").removeClass("fa-spinner fa-spin").css({"color": "red"});
+                                $("#status-" + child_work_id).addClass("fa-times-circle-o").removeClass("fa-spinner fa-spin").css({"color": "red"});
                                 add_tooltip("tooltip-" + child_work_id, "The task did not return it's id");
                                 return true;
                             }

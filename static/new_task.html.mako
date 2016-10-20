@@ -150,12 +150,12 @@
         // Add each environment variable to the request string
         $('.env').each(function(i, obj) {
             if ($(obj).find("input")[0].value !== "") {
-                form += "&env=" + $(obj).find("input")[0].value + "=" + $(obj).find("input")[1].value;
+                form += "&environment=" + $(obj).find("input")[0].value + "=" + $(obj).find("input")[1].value;
             }
         });
         $('.job_env').each(function(i, obj) {
             if ($(obj).find("input")[1].value !== "") {
-                form += "&env=" + $(obj).find("input")[0].value + "=" + $(obj).find("input")[1].value;
+                form += "&environment=" + $(obj).find("input")[0].value + "=" + $(obj).find("input")[1].value;
             }
         });
         $('.removed-default.job_env').each(function(i, obj) {
@@ -165,12 +165,12 @@
         // Add each data volume to the request string
         $('.dvl').each(function(i, obj) {
             if ($(obj).find("input")[0].value !== "" && $(obj).find("input")[1] !== "") {
-                form += "&dvl=" + $(obj).find("input")[0].value + ":" + $(obj).find("input")[1].value;
+                form += "&datavolumes=" + $(obj).find("input")[0].value + ":" + $(obj).find("input")[1].value;
             }
         });
         $('.job_dvl').each(function(i, obj) {
             if ($(obj).find("input")[0].value !== "") {
-                form += "&dvl=" + $(obj).find("input")[0].value + ":" + $(obj).find("input")[1].value;
+                form += "&datavolumes=" + $(obj).find("input")[0].value + ":" + $(obj).find("input")[1].value;
             }
         });
         $('.removed-default.job_dvl').each(function(i, obj) {

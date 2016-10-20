@@ -190,9 +190,6 @@ def job_status(tasks):
     elif success + failed + queued + stopped == len(tasks):
         # Tasks are awaiting execution, but they have not moved to the ready state
         #   This might be caused by a blocked task
-        #
-        # Check if the queued tasks are dependant on a failed or stopped task
-        # TODO: add an option in the UI to stop all dependent tasks
         
         for task in tasks:
             if task.state == "queued":

@@ -69,7 +69,7 @@ def create_task_table(postgres_connection):
     cur.execute("""
     CREATE TABLE tangerine (
         id                       serial        PRIMARY KEY,
-        name                     varchar(100)  NOT NULL UNIQUE,
+        name                     varchar(100)  NOT NULL,
         description              varchar       NOT NULL DEFAULT '',
         tags                     varchar[]     NOT NULL DEFAULT '{}',
         state                    varchar(10)   NOT NULL DEFAULT 'queued',

@@ -4,6 +4,7 @@ MAINTAINER zeagler
 RUN apk add --no-cache --update \
             ca-certificates \
             gcc \
+            docker \
             musl-dev \
             postgresql-dev \
             python \

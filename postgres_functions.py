@@ -106,11 +106,14 @@ class Postgres():
         # TODO: check that the parent exists
             
         # TODO: check input for validity
+        
         if not name:
             return {"error": "Name can not be blank"}
-        elif self.get_task(name=name):
-            return {"error": "Name conflicts with existing task"}
-
+        else:
+            for tasks in self.get_tasks("name", name):
+                if str(tasks.parent_job) == str(parent_job):
+                    return {"error": "Name conflicts with existing task in the parent"}
+                  
         if not (state == "queued" or state == "waiting" or state == "stopped"):
             return {"error": "Requested state is not valid"}
       
@@ -193,11 +196,10 @@ class Postgres():
 
         if self.execute(query):            
             # check that the row was entered
-            task = self.get_task(name=name)
-            
-            if task:
-                task.initialize()
-                return task.__dict__
+            for task in self.get_tasks("name", name):
+                if str(task.parent_job) == str(parent_job):
+                    task.initialize()
+                    return task.__dict__
 
         return {"error": "Could not add task"}
 
@@ -213,9 +215,10 @@ class Postgres():
         
         if not name:
             return {"error": "Name can not be blank"}
-        elif not name == task.name:
-            if self.get_task(name=name):
-                return {"error": "Name conflicts with another task"}
+        elif not name == task.name or not str(parent_job) == str(task.parent_job):
+            for tasks in self.get_tasks("name", name):
+                if str(tasks.parent_job) == str(parent_job):
+                    return {"error": "Name conflicts with existing task in the parent"}
 
         if not image:
             if parent_job == None:
@@ -278,7 +281,7 @@ class Postgres():
         
         if not tag == None:          query += ", tags='{" + tag + "}'"
         if not dep == None:          query += ", dependencies='{" + dep + "}'"
-        if not parent_job == None:   query += ", parent_job='" + str(parent_job) + "'"
+        if not parent == None:       query += ", parent_job=" + str(parent)
         if not removed == None:      query += ", removed_parent_defaults='{" + removed + "}'"
         if not image == None:        query += ", imageuuid='" + image + "'"
         if not command == None:      query += ", command='" + command.replace("'", "''") + "'"
@@ -303,20 +306,20 @@ class Postgres():
 
         return {"error": "Could not update task"}
 
-    def queue_task(self, name):
+    def queue_task(self, id):
         """Queue a task"""
         
         cur = self.conn.cursor()
-        cur.execute("SELECT * FROM tangerine WHERE name='"+name+"';")
+        cur.execute("SELECT * FROM tangerine WHERE id='"+str(id)+"';")
         self.conn.commit()
         task = Task(self.columns, cur.fetchone())
         task.queue("misfire")
         
-    def stop_task(self, name):
+    def stop_task(self, id):
         """Stop a task"""
         
         cur = self.conn.cursor()
-        cur.execute("SELECT * FROM tangerine WHERE name='"+name+"';")
+        cur.execute("SELECT * FROM tangerine WHERE id='"+str(id)+"';")
         self.conn.commit()
         task = Task(self.columns, cur.fetchone())
         task.stop()

@@ -274,7 +274,7 @@ class API(object):
         
         log = get_log(log_name=log_name, lines=lines)
         
-        if log:
+        if not log == None:
             return log
         else:
             return '{"error": "Could not get log for ' + log_name + '"}'
@@ -302,7 +302,7 @@ class API(object):
             if failed: a proper error code
         """
         if id == None and name == None:
-            return dumps({"error": "Task ID is not defined"})
+            return dumps({"error": "Job ID is not defined"})
       
         jobs = job.get_jobs(id, name)
         return jobs[0]
