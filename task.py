@@ -56,7 +56,7 @@ class Task(object):
         # For the web interface
         setattr(self, "dependencies_str", ', '.join(self.dependencies))
         
-        if self.next_run_time: setattr(self, "next_run_str", datetime.fromtimestamp(self.next_run_time).strftime('%I:%M%p %B %d, %Y'))
+        if self.next_run_time: setattr(self, "next_run_str", datetime.fromtimestamp(self.next_run_time).strftime('%I:%M:%S%p %B %d, %Y'))
         else: setattr(self, "next_run_str", "")
         
         if self.last_run_time: setattr(self, "last_run_str", datetime.fromtimestamp(self.last_run_time).strftime('%I:%M%p %B %d, %Y'))
@@ -233,11 +233,15 @@ class Task(object):
         if cause == "failed":
             self.update("queued_by", "auto-restart")
             self.update("failures", self.failures+1)
-            self.update("delay", self.reschedule_delay)
             self.set_last_fail_time()
-            self.update("state", "queued")
             
-        elif cause == "host" or cause == "container":
+            if str(self.reschedule_delay) == "0":
+                self.update("state", "queued")
+            else:
+                self.update("next_run_time", str(int(time()) + int(self.reschedule_delay)))            
+                self.update("state", "failed")
+            
+        elif cause == "host" or cause == "container" or cause == "auto-restart":
             self.update("queued_by", "auto-restart")
             self.update("state", "queued")
             
@@ -296,6 +300,7 @@ class Task(object):
     def failed(self):
         """Go through the process to mark a task as failed"""
         self.warn(None)
+        self.update("next_run_time", None)
         self.update("run_id", "")
         self.update("failures", self.failures+1)
         self.set_last_fail_time()
@@ -313,7 +318,7 @@ class Task(object):
             else:
                 self.update("state", "stopped")
 
-    def set_next_run_time(self, cron=None):
+    def set_next_run_time(self, cron=None, delay=None):
         """Use croniter to generate the next run time based on the cron schedule"""
         
         # If this is a child of another entity, it follows the parent's cron schedule
@@ -354,12 +359,8 @@ class Task(object):
 
     def check_next_run_time(self):
         """Check if the next run time has passed, queue the task if it has"""
-
-        # If this is a child of another entity, it follows the parent's cron schedule
-        if not self.parent_job == None:
-            return False
           
-         # Set the next run time if cron is set but the next run time is blank
+        # Set the next run time if cron is set but the next run time is blank
         if not self.next_run_time:
             if self.cron:
                 self.set_next_run_time()
@@ -367,8 +368,13 @@ class Task(object):
                 return False
 
         # Check that the current time has passed the run time
-        elif self.next_run_time <= int(time()):
-            self.queue("cron")
+        if self.next_run_time <= int(time()):
+            if self.state == "failed":
+                print("failed restarting")
+                self.queue("auto-restart")
+            else:
+                self.queue("cron")
+                
             return True
 
         # Run time hasn't passed or no cron is applied

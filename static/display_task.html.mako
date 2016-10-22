@@ -194,7 +194,7 @@
                     <dt>Recoverable Exit Codes</dt>
                     <dd>${', '.join(str(rec) for rec in task.recoverable_exitcodes)}</dd></br>
                     <dt>Max Failures</dt><dd>${task.max_failures}</dd></br>
-                    <dt>Inital Delay (min)</dt><dd>${task.delay}</dd></br>
+                    <dt>Inital Delay (seconds)</dt><dd>${task.delay}</dd></br>
                     <dt>Delay After Failure</dt><dd>${task.reschedule_delay}</dd>
                 </dl>
             </div>

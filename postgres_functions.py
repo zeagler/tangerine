@@ -6,6 +6,7 @@ This module has functions to connect to a postgreSQL database
     2. Move the remaining functions and variables into the postgres_connection module
     3. Revise all code referencing this module to use the correct modules
 """
+from time import mktime, strftime, time
 from task import Task
 from run import Run
 from user import User
@@ -177,7 +178,13 @@ class Postgres():
         columns = {}
         
         columns["name"] = name
-        columns["state"] = state
+        
+        if state == "queued":
+            if delay == None or str(delay) == "0":
+                columns["state"] = state
+            else:
+                columns["state"] = "waiting"
+                columns["next_run_time"] = str(int(time())+int(delay))
         
         if not tag == None:          columns["tags"]                    = "{"+tag+"}"
         if not dep == None:          columns["dependencies"]            = "{"+dep+"}"
@@ -203,7 +210,11 @@ class Postgres():
             # check that the row was entered
             for task in self.get_tasks("name", name):
                 if str(task.parent_job) == str(parent_job):
-                    task.initialize()
+                    if state == "queued" and not delay == None:
+                        task.set_modified_time()
+                    else:
+                        task.initialize()
+                        
                     return task.__dict__
 
         return {"error": "Could not add task"}

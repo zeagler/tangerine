@@ -501,11 +501,11 @@
                     <div class="col-sm-10"><input class="form-control" id="max_failures" name="max_failures" placeholder="3" value=""></div>
                 </div>
                 <div class="form-group">
-                    <label class="control-label col-sm-2">Inital Delay(min)</label>
+                    <label class="control-label col-sm-2">Inital Delay (seconds)</label>
                     <div class="col-sm-10"><input class="form-control" id="delay" name="delay" placeholder="0" value=""></div>
                 </div>
                 <div class="form-group">
-                    <label class="control-label col-sm-2">Delay After Failure (min)</label>
+                    <label class="control-label col-sm-2">Delay After Failure (seconds)</label>
                     <div class="col-sm-10"><input class="form-control" id="faildelay" name="faildelay" placeholder="5" value=""></div>
                 </div>
             </div>

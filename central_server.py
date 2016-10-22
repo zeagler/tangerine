@@ -23,11 +23,8 @@ from job import get_jobs
 
 def check_queued_task(task):
     if not task.waiting_on_dependencies():
-        if task.delay:
-            task.update("delay", task.delay-1)
-        else:
-            print("Task '" + task.name + "' has it's dependencies met. It will be put in the ready queue")
-            task.ready()
+        print("Task '" + task.name + "' has it's dependencies met. It will be put in the ready queue")
+        task.ready()
 
 def check_agents():
     """
@@ -332,8 +329,10 @@ def central_server():
                         #check_running_task(task)
                         pass
                       
-                    # TODO: also check the recurring time for failed tasks
                     elif task.state == "success" or task.state == "waiting":
+                        task.check_next_run_time()
+                        
+                    elif task.state == "failed" and task.restartable == True:
                         task.check_next_run_time()
             else:
                 postgres.load_queue("task_queue")

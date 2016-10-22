@@ -280,11 +280,11 @@
                     <div class="col-sm-10"><input class="form-control" id="max_failures" name="max_failures" value="${job.max_failures}"></div>
                 </div>
                 <div class="form-group">
-                    <label class="control-label col-sm-2">Inital Delay(min)</label>
+                    <label class="control-label col-sm-2">Inital Delay (seconds)</label>
                     <div class="col-sm-10"><input class="form-control" id="delay" name="delay" value="${job.delay}"></div>
                 </div>
                 <div class="form-group">
-                    <label class="control-label col-sm-2">Delay After Failure (min)</label>
+                    <label class="control-label col-sm-2">Delay After Failure (seconds)</label>
                     <div class="col-sm-10"><input class="form-control" id="faildelay" name="faildelay" value="${job.reschedule_delay}"></div>
                 </div>
             </div>

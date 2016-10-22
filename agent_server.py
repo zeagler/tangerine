@@ -182,7 +182,7 @@ def check_exitcode(run):
         print("Task '" + task.name + "' failed, it will not restart as it was inserted into the table as non-restartable")
         slack.send_message("Task '" + task.name + "' failed, it will not restart as it was inserted into the table as non-restartable")
     
-    elif (task.failures + 1) <= task.max_failures:
+    elif (task.failures + 1) < task.max_failures:
         task.queue("failed")
         print("Task '" + task.name + "' failed with error code '" + str(exit_code) + "', it will attempt to be rescheduled " + str(task.max_failures-task.failures) + " more time(s)")
     
