@@ -6,11 +6,12 @@ This starts the central server which is responsible for hosting the
 TODO: Check on the status of the agents
 """
 
-import thread
+import threading
+import ssl
 from atexit import register
 from time import sleep
-import urllib2
-import ssl
+from urllib.request import urlopen
+import urllib.error
 
 from agent import Agent
 from amazon_functions import Amazon
@@ -25,7 +26,7 @@ def check_queued_task(task):
         if task.delay:
             task.update("delay", task.delay-1)
         else:
-            print "Task '" + task.name + "' has it's dependencies met. It will be put in the ready queue"
+            print("Task '" + task.name + "' has it's dependencies met. It will be put in the ready queue")
             task.ready()
 
 def check_agents():
@@ -44,8 +45,8 @@ def check_agents():
                 try:
                     #url = 'https://'+agent.host_ip+':'+agent.agent_port+'/ping?agent_key=' + agent.agent_key
                     url = 'https://'+agent.host_ip+'/ping?agent_key=' + agent.agent_key
-                    response = urllib2.urlopen(url, context=unverified_context, timeout = 5).read()
-                except urllib2.URLError:
+                    response = urlopen(url, context=unverified_context, timeout = 5).read()
+                except urllib.error.URLError:
                     response = ""
 
                 if not response == "pong":
@@ -301,10 +302,16 @@ def central_server():
     amazon = Amazon()
     slack = Slack()
 
-    thread.start_new_thread(start_web_interface, (postgres, ))
-    thread.start_new_thread(check_ec2_fleet, ())
-    thread.start_new_thread(check_agents, ())
-    thread.start_new_thread(monitor_jobs, ())
+    threads = []
+
+    threads.append(threading.Thread(target=start_web_interface, args=(postgres, )))
+    threads.append(threading.Thread(target=check_ec2_fleet))
+    threads.append(threading.Thread(target=check_agents))
+    threads.append(threading.Thread(target=monitor_jobs))
+    
+    for t in threads:
+        t.daemon = True
+        t.start()
 
     # Infinite loop while the functions above do the work
     while True:

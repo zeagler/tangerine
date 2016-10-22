@@ -1,5 +1,10 @@
 """
 This module has functions to connect to a postgreSQL database
+
+#TODO: Delete this module
+    1. Move all of the task, run, user, and job specific functions into the appropriate module
+    2. Move the remaining functions and variables into the postgres_connection module
+    3. Revise all code referencing this module to use the correct modules
 """
 from task import Task
 from run import Run
@@ -485,7 +490,7 @@ class Postgres():
                 "');"
 
         if not self.execute(query):
-            print "Could not create an entry for the agent on host " + host_ip
+            print("Could not create an entry for the agent on host " + host_ip)
             return False
     
     def get_agents(self, state=None, agent_id=None):

@@ -4,7 +4,7 @@ This module serves as the web interface for Tangerine. The webpage
   through GitHub oauth.
 """
 import os
-import urllib2
+from urllib.request import Request, urlopen
 import json
 import cherrypy
 from cherrypy.lib.static import serve_file
@@ -52,8 +52,8 @@ class Statuspage(object):
                        "&client_secret=" + options['GITHUB_OAUTH_SECRET'] + \
                        "&code=" + code
             
-            req = urllib2.Request(git_auth)
-            res = urllib2.urlopen(req)
+            req = Request(git_auth)
+            res = urlopen(req)
             
             # split the response into a dict
             response = {}
@@ -65,8 +65,8 @@ class Statuspage(object):
             if "access_token" in response.keys():
                 # Get the user information
                 get_info = "https://api.github.com/user?access_token=" + response['access_token']
-                req = urllib2.Request(get_info)
-                res = urllib2.urlopen(req)
+                req = Request(get_info)
+                res = urlopen(req)
                 
                 # Parse the resulting JSON
                 data = json.load(res)
@@ -461,7 +461,7 @@ def start_web_interface(pg):
     http_server.socket_port=80
     http_server.subscribe()
 
-    print "Staring Web Server"
+    print("Staring Web Server")
     cherrypy.engine.start()
     cherrypy.engine.block()
     

@@ -604,7 +604,7 @@ class Job(object):
             postgres.conn.commit()
             
         except:
-            print "Could not delete job #" + str(self.id)
+            print("Could not delete job #" + str(self.id))
             postgres.conn.rollback()
             
     def create_run(self, run_id, agent_id):
@@ -650,6 +650,6 @@ class Job(object):
             postgres.conn.commit()
             
         except:
-            print "Could not create an entry for run #" + str(run_id)
+            print("Could not create an entry for run #" + str(run_id))
             postgres.conn.rollback()
             

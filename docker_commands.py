@@ -45,7 +45,7 @@ class Docker(object):
             if not self.has_image(task.imageuuid):
                 self.pull(task.imageuuid)
             
-            name = task.name.translate(None, '~`!@#$%^&*()_+{}|[]\\:";\'<>?,./= ')
+            name = task.name.translate(dict.fromkeys(map(ord, '~`!@#$%^&*()_+{}|[]\\:";\'<>?,./= '), None))
             volumes = [vol.split(":")[1] for vol in task.datavolumes]
 
             entrypoint = task.entrypoint
@@ -112,7 +112,7 @@ class Docker(object):
         if "Pull complete" in response:
             return True
         else:
-            print response
+            print(response)
             return False
     
     def login(self, username, password, email="", registry=""):
@@ -123,7 +123,7 @@ class Docker(object):
             if ("Login Succeeded" in str(response)) or (username in str(response)):
                 return True
             else:
-                print response
+                print(response)
                 return False
         except Exception as e:
             print('{!r}; error trying to login to registry'.format(e))

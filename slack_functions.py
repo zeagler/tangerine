@@ -2,9 +2,9 @@
 This module is used to send messages to a slack webhook
 """
 
-import urllib2
-from urllib import urlencode
-from os import getenv
+from urllib.request import build_opener, HTTPHandler, Request
+from urllib.parse import urlencode
+
 from settings import Slack as options
 
 class Slack(object):
@@ -17,6 +17,6 @@ class Slack(object):
         """
         if options['ENABLED']:
             data = urlencode({"payload": '{"username": "tangerine", "text": "'+message+'", "icon_emoji": ":tangerine:"}'})
-            opener = urllib2.build_opener(urllib2.HTTPHandler())
-            req = urllib2.Request(options['SLACK_WEBHOOK'])
+            opener = build_opener(HTTPHandler())
+            req = Request(options['SLACK_WEBHOOK'])
             opener.open(req, data.encode('utf-8'))

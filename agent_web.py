@@ -80,6 +80,6 @@ def start_agent_web(agent_key):
     http_server.socket_port=80
     http_server.subscribe()
     
-    print "Staring Web Server"
+    print("Staring Web Server")
     cherrypy.engine.start()
     cherrypy.engine.block()

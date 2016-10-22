@@ -130,8 +130,8 @@ def save_host_configuration(configuration):
     result = postgres.execute(query)
 
     if result == False:
-        print "error creating host configuration. "
-        print query
+        print("error creating host configuration. ")
+        print(query)
         return "{error: An error occured while attempting to create the host configuration}"
     else
         return result

@@ -3,11 +3,12 @@ This starts the Tangerine Agent which is responsible for processing
   and monitoring tasks on a host
 """
 
-import thread
+import threading
 from atexit import register
 from time import sleep, strftime, time
-import urllib2
 from uuid import uuid4
+from urllib.request import urlopen
+import urllib.error
 
 from agent import Agent
 from amazon_functions import Amazon
@@ -98,12 +99,12 @@ def start_task(task, job=None):
     
     if not run_id:
         task.ready()
-        print "Could not reserve a run id"
+        print("Could not reserve a run id")
         return
     
     container = docker.start_task(task, run_id)
     if container:
-        print "Run #" + str(run_id) + " for task '" + task.name + "' has started running"
+        print("Run #" + str(run_id) + " for task '" + task.name + "' has started running")
         task.running(run_id, agent.agent_id)
         run = postgres.get_run(run_id)
         if monitor_task(container, run) == "stopped":
@@ -113,7 +114,7 @@ def start_task(task, job=None):
         
     else:
         task.ready()
-        print "A container has failed to start for task '" + task.name + "'"
+        print("A container has failed to start for task '" + task.name + "'")
 
 def monitor_task(container, run):
     # Check task for stopping, disabling
@@ -168,26 +169,26 @@ def check_exitcode(run):
     # Otherwise the tasks state is set to `queued` and will be rescheduled
     if exit_code == 0:
         task.success()
-        print "Task '" + task.name + "' has completed successfully"
+        print("Task '" + task.name + "' has completed successfully")
         slack.send_message("Task '" + task.name + "' has completed successfully")
 
     elif exit_code not in task.recoverable_exitcodes and 0 not in task.recoverable_exitcodes:
         task.failed()
-        print "Task '" + task.name + "' failed with error code '" +str(exit_code)+ "'. It will not be rescheduled"
+        print("Task '" + task.name + "' failed with error code '" +str(exit_code)+ "'. It will not be rescheduled")
         slack.send_message("Task '" + task.name + "' failed with error code '" +str(exit_code)+ "'. It will not be rescheduled")
       
     elif not task.restartable:
         task.failed()
-        print "Task '" + task.name + "' failed, it will not restart as it was inserted into the table as non-restartable"
+        print("Task '" + task.name + "' failed, it will not restart as it was inserted into the table as non-restartable")
         slack.send_message("Task '" + task.name + "' failed, it will not restart as it was inserted into the table as non-restartable")
     
     elif (task.failures + 1) <= task.max_failures:
         task.queue("failed")
-        print "Task '" + task.name + "' failed with error code '" + str(exit_code) + "', it will attempt to be rescheduled " + str(task.max_failures-task.failures) + " more time(s)"
+        print("Task '" + task.name + "' failed with error code '" + str(exit_code) + "', it will attempt to be rescheduled " + str(task.max_failures-task.failures) + " more time(s)")
     
     else:
         task.failed()
-        print "Task '" + task.name + "' has failed "+str(task.max_failures)+" times, it will not be rescheduled"
+        print("Task '" + task.name + "' has failed "+str(task.max_failures)+" times, it will not be rescheduled")
         slack.send_message("Task '" + task.name + "' has failed "+str(task.max_failures)+" times, it will not be rescheduled")
 
 def check_halting(run, container):
@@ -217,7 +218,7 @@ def add_agent():
     agent_id = postgres.reserve_next_agent_id();
 
     if not agent_id:
-        print "Could not reserve an agent id"
+        print("Could not reserve an agent id")
         return
       
     if options['DEVELOPMENT'] == True:
@@ -235,10 +236,10 @@ def add_agent():
     else:
         postgres.add_agent(
                           agent_id = agent_id,
-                          host_ip = urllib2.urlopen('http://169.254.169.254/latest/meta-data/local-ipv4').read(),
+                          host_ip = urlopen('http://169.254.169.254/latest/meta-data/local-ipv4').read(),
                           agent_port = 443,
-                          instance_id = urllib2.urlopen('http://169.254.169.254/latest/meta-data/instance-id').read(),
-                          instance_type = urllib2.urlopen('http://169.254.169.254/latest/meta-data/instance-type').read(),
+                          instance_id = urlopen('http://169.254.169.254/latest/meta-data/instance-id').read(),
+                          instance_type = urlopen('http://169.254.169.254/latest/meta-data/instance-type').read(),
                           available_memory = dict((i.split()[0].rstrip(':'),int(i.split()[1])) for i in open('/proc/meminfo').readlines())['MemTotal'],
                           agent_creation_time = int(time()),
                           agent_key = agent_key
@@ -258,8 +259,12 @@ def agent_server():
     docker = Docker()
 
     agent_info = add_agent()
-    print agent_info
-    thread.start_new_thread(start_agent_web, (agent_info['agent_key'], ))
+    print(agent_info)
+    
+    server_thread = threading.Thread(target=start_agent_web, args=(agent_info['agent_key'], ))
+    server_thread.daemon = True
+    server_thread.start()
+    
     agent = Agent(postgres.get_agents(agent_id=agent_info['agent_id']))
 
     # Loop through the task queue

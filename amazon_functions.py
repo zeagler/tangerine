@@ -10,9 +10,9 @@ class Amazon():
     def __init__(self):
         if self.enabled():
             setattr(self, "ec2", client('ec2'))
-            print "Connected to Amazon EC2"
+            print("Connected to Amazon EC2")
         else:
-            print "Spot Request scaling is disabled"
+            print("Spot Request scaling is disabled")
 
     def scale_spot_request(self, new_capacity):
         """
@@ -34,9 +34,9 @@ class Amazon():
             )
 
             if request['Return'] is True:
-                print "Spot Fleet scaled to " + str(new_capacity) + " spot instances"
+                print("Spot Fleet scaled to " + str(new_capacity) + " spot instances")
             else:
-                print "Failed to scale Spot Request"
+                print("Failed to scale Spot Request")
 
     def get_target_capacity(self):
         """Return the current target capacity of the Spot Request"""
@@ -55,7 +55,7 @@ class Amazon():
     def terminate_instance(self, instance_id):
         """Terminate an EC2 instance"""
         if self.enabled():
-            print "Terminating EC2 Instance " + instance_id
+            print("Terminating EC2 Instance " + instance_id)
             response = self.ec2.terminate_instances(InstanceIds=[instance_id])
 
     def enabled(self):

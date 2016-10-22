@@ -4,9 +4,6 @@ This program is used to schedule tasks onto hosts in conjunction with Rancher
 The tasks are tracked through a table in a postgresql database, this
   allows the Tangerine instance to be restartable and replaceable
   without losing any task data.
-
-The hosts are discovered through the Rancher API. Only hosts with a
-  user-defined label: `$HOST_LABEL` will be chosen to recieve tasks.
 """
 
 import sys
@@ -18,23 +15,23 @@ from postgres_functions import Postgres
 from web_interface import start_web_interface
 
 if __name__ == '__main__':
-    print "Starting Tangerine"
-    print "  postgreSQL table: " + settings.Postgresql['TASK_TABLE']
-    print "     Slack webhook: " + settings.Slack['SLACK_WEBHOOK']
-    print "Spot Fleet Request: " + settings.Amazon['SPOT_FLEET_REQUEST_ID']
+    print("Starting Tangerine")
+    print("  postgreSQL table: " + settings.Postgresql['TASK_TABLE'])
+    print("     Slack webhook: " + settings.Slack['SLACK_WEBHOOK'])
+    print("Spot Fleet Request: " + settings.Amazon['SPOT_FLEET_REQUEST_ID'])
     
     if len(sys.argv) > 1:
         if (sys.argv[1] == "server"):
-            print "Starting Server"
+            print("Starting Server")
             status = central_server()
             
         elif (sys.argv[1] == "web"):
-            print "Starting Web Interface"
+            print("Starting Web Interface")
             sys.argv[1] = ""
             status = start_web_interface(Postgres())
             
         elif (sys.argv[1] == "agent"):
-            print "Starting Agent"
+            print("Starting Agent")
             status = agent_server()
           
         else:

@@ -403,7 +403,7 @@ class Task(object):
                 postgres.conn.commit()
                 
             except:
-                print "Could not delete task #" + str(self.id)
+                print("Could not delete task #" + str(self.id))
                 postgres.conn.rollback()
             
     def create_run(self, run_id, agent_id):
@@ -438,7 +438,7 @@ class Task(object):
                 "', '" + str(agent_id) + \
                 "', '" + str(self.last_run_time) + \
                 "', '" + datetime.fromtimestamp(self.last_run_time).strftime('%I:%M%p %B %d, %Y') + \
-                "', '" + self.name.translate(None, '~`!@#$%^&*()_+{}|[]\\:";\'<>?,./= ') + "-" + str(run_id) + ".log" + \
+                "', '" + self.name.translate(dict.fromkeys(map(ord, '~`!@#$%^&*()_+{}|[]\\:";\'<>?,./= '), None)) + "-" + str(run_id) + ".log" + \
                 "');"
 
         cur = postgres.conn.cursor()
@@ -447,7 +447,7 @@ class Task(object):
             postgres.conn.commit()
             
         except:
-            print "Error running query: " + query
-            print "Could not create an entry for run #" + str(run_id)
+            print("Error running query: " + query)
+            print("Could not create an entry for run #" + str(run_id))
             postgres.conn.rollback()
             

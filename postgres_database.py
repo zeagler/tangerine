@@ -269,7 +269,7 @@ def create_options_table(postgres_connection):
 
 def create_host_table(postgres_connection):
     #TODO
-    print "WIP"
+    print("WIP")
 
 def create_agent_table(postgres_connection):
     """Create the table to store agent history"""
@@ -294,5 +294,5 @@ def create_agent_table(postgres_connection):
     
 def create_notifications_table(postgres_connection):
     #TODO
-    print "WIP"
+    print("WIP")
       

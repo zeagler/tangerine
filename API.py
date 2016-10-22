@@ -275,7 +275,7 @@ class API(object):
         log = get_log(log_name=log_name, lines=lines)
         
         if not log == None:
-            return log
+            return log.decode("utf-8")
         else:
             return '{"error": "Could not get log for ' + log_name + '"}'
     

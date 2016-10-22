@@ -7,11 +7,13 @@ RUN apk add --no-cache --update \
             docker \
             musl-dev \
             postgresql-dev \
-            python \
-            python-dev \
-            py-pip \
+            python3 \
+            python3-dev \
             tzdata \
-    && pip install boto3 \
+    && python3 -m ensurepip \
+    && rm -r /usr/lib/python*/ensurepip \
+    && pip3 install --upgrade pip\
+                   boto3 \
                    cattle \
                    cherrypy \
                    croniter \
@@ -19,13 +21,12 @@ RUN apk add --no-cache --update \
                    mako \
                    psycopg2 \
                    pyyaml \
-    && apk del --purge gcc musl-dev python-dev py-pip \
-    && rm -rf /var/cache/apk/* \
-    && rm -rf /root/.cache/pip
+    && apk del --purge gcc musl-dev python3-dev \
+    && rm -rf /root/.cache
     
 RUN mkdir /tangerine
 
 COPY *.py README.md /tangerine/
 COPY static /tangerine/static
-CMD ["python", "tangerine.py"]
+CMD ["python3", "tangerine.py"]
 WORKDIR /tangerine
