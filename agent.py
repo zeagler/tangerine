@@ -7,6 +7,15 @@ from json import dumps
 from postgres_functions import Postgres
 global postgres
 postgres = Postgres()
+      
+def get_agents():
+    query = "SELECT * FROM agents WHERE state='active' OR state='bad_agent' OR agent_termination_time>" + str(time()-8*60*60) + " ORDER BY agent_id DESC;"
+    agents = postgres.execute(query)
+    
+    if agents:
+        return [Agent(agent) for agent in agents.fetchall()]
+    else:
+        return None
 
 class Agent(object):
     def __init__(self, values):
@@ -17,6 +26,9 @@ class Agent(object):
 
         # Set the JSON representation
         setattr(self, "json", dumps(self.__dict__))
+        
+        # Get the tasks ran by this agent
+        setattr(self, "tasks", [{"name": run.name, "run_id": run.run_id, "result_state": run.result_state} for run in postgres.get_runs_by_agent(self.agent_id)])
 
     def update_state(self, state):
         """ """

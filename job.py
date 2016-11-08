@@ -42,22 +42,22 @@ def get_jobs(id=None, name=None, column=None, value=None):
     else:
         return None
 
-def queue_job(id=None, name=None, username=None, mode=0):
+def queue_job(id=None, name=None, username=None, state=""):
     """Queue a job"""
     job = get_jobs(id, name)[0]
     
     if job:
-        job.queue("misfire", username, mode)
+        job.queue("misfire", username, state)
         return True
     else:
         return False
 
-def stop_job(id=None, name=None, username=None):
+def stop_job(id=None, name=None, username=None, state=""):
     """Stop a job"""
     job = get_jobs(id, name)[0]
     
     if job:
-        job.stop()
+        job.stop(state)
         return True
     else:
         return False
@@ -394,25 +394,21 @@ class Job(object):
         global postgres
         return postgres.get_tasks("parent_job", str(self.id))
 
-    def queue(self, cause, username=None, mode=0):
+    def queue(self, cause, username=None, state=""):
         """
         Go through the process to mark a job as queued
         Different causes have a different queue process
         """
-        # mode 0 = restart all
-        if int(mode) == 0:
+        # if state is not included restart all
+        if state == "":
             for task in self.child_tasks():
                 task.queue(cause, username)
                 
-        # mode 1 = restart failed
-        elif int(mode) == 1:
-            for task in self.child_tasks():
-                if task.state == "failed":
-                    task.queue(cause, username)
-          
-        # any other mode is invalid
+        # otherwise only start tasks with the selected states
         else:
-            return False
+            for task in self.child_tasks():
+                if task.state in state:
+                    task.queue(cause, username)
         
         if cause == "cron":
             self.update("queued_by", "cron")
@@ -481,13 +477,22 @@ class Job(object):
         self.set_last_fail_time()
         self.update("state", "failed")
 
-    def stop(self):
+    def stop(self, state=""):
         """
         Go through the process of stopping a job. This is done by stopping all the tasks
           that are contained within the job.
         """
-        for task in self.child_tasks():
-            task.stop()        
+        
+        # if state is not included stop all
+        if state == "":
+            for task in self.child_tasks():
+                task.stop()
+                
+        # otherwise only stop tasks with the selected states
+        else:
+            for task in self.child_tasks():
+                if task.state in state:
+                    task.stop()
         
         self.warn(None)
         if self.state == "running":

@@ -45,7 +45,7 @@
                 <ul class="nav navbar-nav">
                     <li class="active"><a>Overview</a></li>
                     <li><a href="/history">History</a></li>
-                    <li><a>Infrastructure</a></li>
+                    <li><a href="/infrastructure">Infrastructure</a></li>
                 </ul>
                 <ul class="nav navbar-nav navbar-right">
                     % if usertype == "admin":

@@ -44,9 +44,9 @@ def check_agents():
                     url = 'https://'+agent.host_ip+'/ping?agent_key=' + agent.agent_key
                     response = urlopen(url, context=unverified_context, timeout = 5).read()
                 except urllib.error.URLError:
-                    response = ""
+                    response = "".encode("utf-8")
 
-                if not response == "pong":
+                if not response.decode("utf-8") == "pong":
                     # this agent did not respond
                     if agent.state == "active":
                         agent.update_state("bad_agent")
@@ -175,7 +175,6 @@ def job_status(tasks):
         
     elif success + failed == len(tasks):
         # All the tasks executed, but there was an error
-        # TODO: alert the user in the UI when a task in a job fails
         return "failed"
     
     elif success + failed + queued + ready + running == len(tasks):

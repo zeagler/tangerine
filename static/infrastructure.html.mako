@@ -1,6 +1,6 @@
 <html>
     <head>
-        <title>Tangerine Status Page</title>
+        <title>Infrastructure</title>
         
         <link rel="stylesheet" type="text/css" href="static/style.css">
         <link rel="shortcut icon" type="image/x-icon" href="static/favicon.ico" />
@@ -13,21 +13,38 @@
 
         <!-- Bootstrap Cerulean Theme -->
         <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootswatch/3.3.6/cerulean/bootstrap.min.css">
+        <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js" integrity="sha384-Tc5IQib027qvyjSMfHjOMaLkfuWVxZxUPnCJA7l2mCWNIpG9mGCD8wGNIcPD7Txa" crossorigin="anonymous"></script>
+        
+        <!-- Font Awesome  -->
+        <link href="https://maxcdn.bootstrapcdn.com/font-awesome/4.6.3/css/font-awesome.min.css" rel="stylesheet" integrity="sha384-T8Gy5hrqNKT+hzMclPo118YTQO6cYprQmhrYwIiQ/3axmI1hQomh7Ud2hPOy8SP1" crossorigin="anonymous">
+
+        <!-- Typeahead -->
+        <script src="https://twitter.github.io/typeahead.js/releases/latest/typeahead.bundle.js"></script>
         
         <!-- Plot.ly for metric charts -->
         <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
         
-        <!-- Tangerine Scripts -->
+        <!-- Tangerine scriptes -->
         <script src="static/scripts.js"></script>
+        
+        <script>
+            $(document).ready(function(e) {
+                loadHosts()
+            
+                setInterval(function(){  // this will update hosts every 5 seconds
+                    loadHosts()
+                }, 5000);
+            });
+        </script>
     </head>
     
-    <body>
+    <body>                
         <nav id="navbar" class="navbar navbar-default navbar-static-top" style="max-height: 50px;">
             <div class="container-fluid">
                 <ul class="nav navbar-nav">
                     <li><a href="/">Overview</a></li>
-                    <li class="active"><a href="/history">History</a></li>
-                    <li><a href="/infrastructure">Infrastructure</a></li>
+                    <li><a href="/history">History</a></li>
+                    <li class="active"><a>Infrastructure</a></li>
                 </ul>
                 <ul class="nav navbar-nav navbar-right">
                     % if usertype == "admin":
@@ -45,6 +62,17 @@
                 </ul>
             </div>
         </nav>
+    
+        <div id="infra_view" class="container-fluid">
+            <div id="infra_panel" class="panel panel-default" style="height: auto;">
+                <div style="width: 98%; margin-left: 1%; overflow: hidden;">
+                    <p id="host_count_p">Hosts: <span id="host_count">0</span></p>
+                    <p id="task_count_p">Queued Tasks: <span id="task_count">0</span></p>
+                </div>
+            </div>
+            
+            <div id="host_container"></div>
+        </div>
         
         <!-- Modals -->
         <div class="modal fade" id="displayRunModal" role="dialog">
@@ -54,52 +82,6 @@
                 </div>
             </div>
         </div>
-
-        <div class="container-fluid" id="run_history">
-            <table id="run_table" class="datatable table table-striped table-bordered" style="background-color: white!important">
-              <thead>
-                <tr>
-                  <th>Id</th>
-                  <th>Task</th>
-                  <th>Result</th>
-                  <th>Finished</th>
-                </tr>
-              </thead>
-            </table>
-            <script>
-                // Initialize Datatables
-                $(document).ready(function() {
-                  $('#run_table').dataTable( {
-                      ajax: "/get_runs",
-                      columns: [
-                          { data: 'run_id', width: "10%" },
-                          { data: 'name', width: "30%" },
-                          { data: 'result_state', width: "30%" },
-                          { data: 'run_finish_time_str', width: "30%" }
-                      ],
-                      scrollY:        "100%",
-                      order: [[0, 'desc']],
-                      orderMulti: false,
-                      autoWidth: true
-                  });
-
-                // Add event listener for opening and closing details
-                $('#run_table tbody').on("mouseover", "tr", function () {
-                    $(this).css({backgroundColor: 'f1f1f1'});
-                }).on("mouseout", "tr", function () {
-                    $(this).css({backgroundColor: 'f9f9f9'});
-                }).on("click", "tr", function () {
-                    $(this).css({backgroundColor: 'f9f9f9'});
-                    id = $($(this).find('td')[0]).text();
-
-                    $('#display-run-modal-content').load("display_run?id=" + id, function() {
-                        $('#displayRunModal').modal('show');
-                    });
-                });
-                
-                });
-                
-            </script>
-        </div>
+        
     </body>
 </html>

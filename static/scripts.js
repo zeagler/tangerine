@@ -152,6 +152,79 @@ function set_job(job) {
     loadTasks()
 }
 
+function loadHosts() {
+    $.get('get_hosts', function(data) {
+        json = JSON.parse(data);
+        
+        if (json.redirect) {
+            window.location.href = json.redirect;
+        } else {
+            $hosts = json.hosts;
+            task_count = json.queued_task_count;
+            host_count = 0;
+            hosts_updated = "";
+            
+            for (var i = 0; i < $hosts.length; i++) {
+                var tasks = ""
+                for (var j = 0; j < $hosts[i].tasks.length; j++) {
+                    if ($hosts[i].tasks[j].result_state == "success") {
+                        task_state = "success"
+                    } else if ($hosts[i].tasks[j].result_state == "failed" || $hosts[i].tasks[j].result_state == "host failure") {
+                        task_state = "danger"
+                    } else if ($hosts[i].tasks[j].result_state == "stopped") {
+                        task_state = "default"
+                    } else {
+                        task_state = "info"
+                    }
+                    
+                    tasks += '<div class="host_task"' +
+                                  ' onclick="displayRunModal(' + $hosts[i].tasks[j].run_id + ')"' +
+                                  ' data-toggle="tooltip" title="'+$hosts[i].tasks[j].name + "_" + $hosts[i].tasks[j].run_id+'">' +
+                                  '<span class="fa fa-circle color-' + task_state + '"/>' +
+                                  '<span>' +
+                                          " " + $hosts[i].tasks[j].name + "_" + $hosts[i].tasks[j].run_id +
+                                  '</span>' +
+                              '</div>'
+                }
+                
+                if (tasks == "") tasks='<p class="host_task">No Tasks</p>'
+              
+                if ($hosts[i].state == "inactive") {
+                    var date = new Date($hosts[i].agent_termination_time*1000);
+                    hosts_updated +=
+                    '<div class="host_card panel panel-danger">' +
+                        '<div class="panel-heading">' +
+                            '<p class="host_ip">' + $hosts[i].host_ip + '</p>' +
+                            '<p class="host_specs">' + $hosts[i].instance_type + ' | ' + ($hosts[i].available_memory/1024/1024).toFixed(2) + 'GB</p>' +
+                            '<div class="well">' + tasks + '</div>' +
+                            '<p class="host_termination">Terminated: ' + date.getHours() + ':' + ("0" + date.getMinutes()).substr(-2) + '</p>' +
+                        '</div>' +
+                    '</div>'
+                } else {
+                    host_count++;
+                    hosts_updated +=
+                    '<div class="host_card panel panel-primary">' +
+                        '<div class="panel-heading">' +
+                            '<p class="host_ip">' + $hosts[i].host_ip + '</p>' +
+                            '<p class="host_specs">' + $hosts[i].instance_type + ' | ' + ($hosts[i].available_memory/1024/1024).toFixed(2) + 'GB</p>' +
+                            '<div class="well">' + tasks + '</div>' +
+                        '</div>' +
+                    '</div>'
+                }
+            }
+
+            if (hosts_updated == "") {
+                $('#host_container').html('<div class="empty_hosts">No Hosts Available</div>')
+            } else {
+                $('#host_container').html(hosts_updated)
+            }
+            $('#host_count').html(host_count)
+            $('#task_count').html(task_count)
+            $('[data-toggle="tooltip"]').tooltip()
+        }
+    });
+}
+
 // refresh the tasks
 function loadTasks() {
     $.get('get_project', function(data) {
@@ -311,18 +384,36 @@ function show_state(state) {
     }
 }
 
-
-function alter_job(action, id) {
+function stop_job(id) {
     username = $($("#nav_user")[0]).find('img')[0].alt
     xhttp = new XMLHttpRequest();
-    xhttp.open("GET", action+"?id="+id+"&username="+username, true);
+    
+    state = ""
+    
+    $.each($(".stateSelector"), function(i, str) {
+        if (str.checked) {
+            state += "&state=" + str.value
+        }
+    });
+
+    
+    xhttp.open("GET", "stop_job?id="+id+"&username="+username+state, true);
     xhttp.send();
 }
 
 function queue_job(id) {
     username = $($("#nav_user")[0]).find('img')[0].alt
     xhttp = new XMLHttpRequest();
-    xhttp.open("GET", "queue_job?id="+id+"&username="+username+"&mode="+$('#resumeTasks:checked').length, true);
+    
+    state = ""
+    
+    $.each($(".stateSelector"), function(i, str) {
+        if (str.checked) {
+            state += "&state=" + str.value
+        }
+    });
+
+    xhttp.open("GET", "queue_job?id="+id+"&username="+username+state, true);
     xhttp.send();
 }
 
@@ -350,13 +441,41 @@ function displayJobMisfire(id, name) {
 
         '<div class="modal-body">' +
             '<div class="text-center">' +
-                '<p>This will queue all tasks contained in the job.</p>' + 
-                '<input type="checkbox" id="resumeTasks" value="resume"> Resume failed tasks? <span class="glyphicon glyphicon-question-sign" style="color: darkgrey" data-toggle="tooltip" data-placement="top" title="If this is checked only tasks that have failed will be queued. If this is left unchecked the entire job will be restarted and all tasks will be stopped and queued."></span>' +
+                '<p>Which tasks should be misfired? Selected tasks will stop and be restarted.</p>' + 
+                '<input type="checkbox" id="queueFailed" class="stateSelector" value="failed" style="margin-left: 20px" checked> failed</input>' +
+                '<input type="checkbox" id="queueStopped" class="stateSelector" value="stopped&state=stopping" style="margin-left: 20px" checked> stopped</input>' +
+                '<input type="checkbox" id="queueQueued" class="stateSelector" value="queued&state=waiting" style="margin-left: 20px"> queued</input>' +
+                '<input type="checkbox" id="queueRunning" class="stateSelector" value="running&state=starting&state=ready" style="margin-left: 20px"> running</input>' +
+                '<input type="checkbox" id="queueSucceeded" class="stateSelector" value="success" style="margin-left: 20px"> succeeded</input>' +
+                '<input type="checkbox" id="selectAll" style="margin-left: 20px"> all</input>' +
                 '<br><br>' +
-                '<button class="btn btn-default" class="close" data-dismiss="modal" style="margin-right: 20px;">Cancel</button>' +
+                '<button class="btn btn-default" class="close" data-dismiss="modal" style="margin-right: 40px;">Cancel</button>' +
                 '<button class="btn btn-success" class="close" data-dismiss="modal" onclick="queue_job(' + id + ')">Comfirm</button>' +
             '</div>' +
-        '</div>'
+        '</div>' +
+        
+        '<script>' + 
+            'var checkedStates = [];' +
+            '$("#selectAll").change(function() {' +
+                'if($(this).is(":checked")) {' +
+                    'checkedStates = [];' +
+                    '$.each($(".stateSelector:checked"), function () { checkedStates.push(this.id); });' +
+                    '$(".stateSelector").prop("checked", true);' +
+                '} else {' +
+                    '$(".stateSelector").prop("checked", false);' +
+                    '$.each(checkedStates, function () { $("#" + this).prop("checked", true) });' +
+                '}' +
+            '});' +
+            '$(".stateSelector").change(function() {' +
+                'if($(this).is(":checked")) {' +
+                    'if ($(".stateSelector:checked").length == 5) {' +
+                        '$("#selectAll").prop("checked", true);' + 
+                    '}' +
+                '} else {' +
+                    '$("#selectAll").prop("checked", false);' + 
+                '}' +
+            '});' +
+        '</script>'
   );
   $('[data-toggle="tooltip"]').tooltip()
   $('#jobModal').modal('show');
@@ -371,12 +490,40 @@ function displayJobStop(id, name) {
 
         '<div class="modal-body">' +
             '<div class="text-center">' +
-                '<p>This will stop all tasks contained in the job.</p>' + 
-                '<br>' +
+                '<p>Which tasks should be stopped?</p>' + 
+                '<input type="checkbox" id="stopFailed" class="stateSelector" value="failed" style="margin-left: 20px"> failed</input>' +
+                '<input type="checkbox" id="stopQueued" class="stateSelector" value="queued&state=waiting&state=ready" style="margin-left: 20px" checked> queued</input>' +
+                '<input type="checkbox" id="stopRunning" class="stateSelector" value="running&state=starting&state=ready" style="margin-left: 20px" checked> running</input>' +
+                '<input type="checkbox" id="stopSucceeded" class="stateSelector" value="success" style="margin-left: 20px"> succeeded</input>' +
+                '<input type="checkbox" id="selectAll" style="margin-left: 20px"> all</input>' +
+                '<br><br>' +
                 '<button class="btn btn-default" class="close" data-dismiss="modal" style="margin-right: 20px;">Cancel</button>' +
-                '<button class="btn btn-danger" class="close" data-dismiss="modal" onclick="alter_job(\'stop_job\', ' + id + ')">Stop Job</button>' +
+                '<button class="btn btn-danger" class="close" data-dismiss="modal" onclick="stop_job(' + id + ')">Stop Job</button>' +
             '</div>' +
-        '</div>'
+        '</div>' +
+        
+        '<script>' + 
+            'var checkedStates = [];' +
+            '$("#selectAll").change(function() {' +
+                'if($(this).is(":checked")) {' +
+                    'checkedStates = [];' +
+                    '$.each($(".stateSelector:checked"), function () { checkedStates.push(this.id); });' +
+                    '$(".stateSelector").prop("checked", true);' +
+                '} else {' +
+                    '$(".stateSelector").prop("checked", false);' +
+                    '$.each(checkedStates, function () { $("#" + this).prop("checked", true) });' +
+                '}' +
+            '});' +
+            '$(".stateSelector").change(function() {' +
+                'if($(this).is(":checked")) {' +
+                    'if ($(".stateSelector:checked").length == 4) {' +
+                        '$("#selectAll").prop("checked", true);' + 
+                    '}' +
+                '} else {' +
+                    '$("#selectAll").prop("checked", false);' + 
+                '}' +
+            '});' +
+        '</script>'
   );
   $('#jobModal').modal('show');
 }
@@ -435,6 +582,12 @@ function updateTaskModal(id) {
 function displayTaskModal(id) {
     $('#display-task-modal-content').load("display_task?id=" + id, function() {
         $('#displayTaskModal').modal('show');
+    });
+}
+
+function displayRunModal(id) {
+    $('#display-run-modal-content').load("display_run?id=" + id, function() {
+        $('#displayRunModal').modal('show');
     });
 }
 

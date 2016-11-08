@@ -104,6 +104,17 @@ class Postgres():
         self.conn.commit()
         return [Task(self.columns, task) for task in cur.fetchall()]
 
+    def get_queued_task_count(self):
+        query = "SELECT COUNT(id) FROM tangerine WHERE state='queued' OR state='ready' OR state='running' OR state='starting';"
+        result = self.execute(query)
+        
+        if result:
+            response = result.fetchone()[0]
+            print(response)
+            return response
+        else:
+            return 0
+
     def add_task(self, name, state, tags, dependencies, parent_job, removed_parent_defaults, image, command, entrypoint, cron,
                  restartable, exitcodes, max_failures, delay, faildelay,
                  environment, datavolumes, port, description):
@@ -438,7 +449,19 @@ class Postgres():
         runs = [Run(col, run) for run in cur.fetchall()]
         
         return runs
-    
+          
+    def get_runs_by_agent(self, agent_id):
+        """Get the information of a run"""
+
+        query = "SELECT run_id, name, result_state FROM task_history WHERE agent_id='"+str(agent_id)+"' ORDER BY run_id DESC;"
+        
+        cur = self.conn.cursor()
+        cur.execute(query)
+        self.conn.commit()
+
+        col = [['run_id'], ['name'], ['result_state']]
+        return [Run(col, run) for run in cur.fetchall()]
+      
     def reserve_next_run_id(self):
         """Get the next valid run id"""
         query = "SELECT NEXTVAL(pg_get_serial_sequence('task_history', 'run_id'))"

@@ -57,7 +57,7 @@ class Statuspage(object):
             
             # split the response into a dict
             response = {}
-            for param in res.read().split("&"):
+            for param in res.read().decode('utf-8').split("&"):
                 response[param.split("=")[0]] = param.split("=")[1]
             
             # Second, get the GitHub acccount information
@@ -67,9 +67,9 @@ class Statuspage(object):
                 get_info = "https://api.github.com/user?access_token=" + response['access_token']
                 req = Request(get_info)
                 res = urlopen(req)
-                
+
                 # Parse the resulting JSON
-                data = json.load(res)
+                data = json.loads(res.read().decode('utf-8'))
                 
                 # if the user is in the authorized user list
                 userdata = API.get_users(userid=str(data['id']))
@@ -82,7 +82,8 @@ class Statuspage(object):
                         # if this doesn't match force a new session
                         agent = cherrypy.request.headers['User-Agent']
                         # remote_ip = cherrypy.request.remote.ip
-                        cherrypy.session["_ident"] = sha256(agent).hexdigest()
+                        print(agent)
+                        cherrypy.session["_ident"] = sha256(agent.encode('utf-8')).hexdigest()
                         
                         # Set the expiration time
                         cherrypy.session['expires'] = int(time()) + 1800 # 30 minutes from now
@@ -273,6 +274,29 @@ class Statuspage(object):
     def queue_task(self, id, username):
         return API.queue_task(id, username)
       
+    @cherrypy.expose
+    def infrastructure(self):
+        tmpl = lookup.get_template("infrastructure.html.mako")
+        if options['USE_AUTH']:
+            return tmpl.render(
+                                username = cherrypy.session['username'],
+                                userimageurl = cherrypy.session['userimageurl'],
+                                usertype = cherrypy.session['usertype']
+                              )
+        else:
+            return tmpl.render(
+                                username = cherrypy.session.get("username", "dev"),
+                                userimageurl = cherrypy.session.get("userimageurl", "dev"),
+                                usertype = cherrypy.session.get("usertype", "dev")
+                              )
+          
+    @cherrypy.expose
+    def get_hosts(self):
+        if cherrypy.session.get("login_msg", None) == "AJAX not authorized":
+            return '{"redirect": "/login"}'
+          
+        return API.get_hosts()
+      
     #
     #
     # Begin functions for jobs
@@ -317,12 +341,12 @@ class Statuspage(object):
         return API.delete_job(id, name, username, mode)
       
     @cherrypy.expose
-    def queue_job(self, id=None, name=None, username=None, mode=0):
-        return API.queue_job(id, name, username, mode)
+    def queue_job(self, id=None, name=None, username=None, state=""):
+        return API.queue_job(id, name, username, state)
     
     @cherrypy.expose
-    def stop_job(self, id=None, name=None, username=None):
-        return API.stop_job(id, name, username)
+    def stop_job(self, id=None, name=None, username=None, state=""):
+        return API.stop_job(id, name, username, state)
     
     @cherrypy.expose
     def update_job(
@@ -368,7 +392,7 @@ def authenticate():
     # If the session is not authorized redirect the user to the login page
     if cherrypy.session.get("authorized", None) == None:
         # Recurring AJAX requests should always send back a redirect signal
-        if (path == "/get_project"):
+        if (path == "/get_project" or path == "/get_hosts"):
             cherrypy.session["login_msg"] = "AJAX not authorized"
             return
       
@@ -388,7 +412,7 @@ def authenticate():
     # if the useragent doesn't match the original request, force a new session
     useragent = cherrypy.request.headers['User-Agent']
     
-    if not cherrypy.session["_ident"] == sha256(useragent).hexdigest():
+    if not cherrypy.session["_ident"] == sha256(useragent.encode('utf-8')).hexdigest():
         cherrypy.session.clear()
         cherrypy.session.delete()
         cherrypy.lib.sessions.expire()
@@ -399,7 +423,7 @@ def authenticate():
     now = int(time())
     if cherrypy.session['expires'] >= now:
         # Don't extend the session for recurring AJAX requests
-        if not path == "/get_project":
+        if not path == "/get_project" and not path == "/get_hosts":
             cherrypy.session['expires'] = now + 1800 # 30 minutes from now
     else:
         # destroy the session if it is expired

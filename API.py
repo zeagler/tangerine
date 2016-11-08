@@ -1,7 +1,4 @@
 # TODO:
-#   -Delete a task
-#   Get task history
-#   Get hosts - Rancher and AWS
 #   Get specific host
 #   Get host history
 #   Get scaling history
@@ -17,6 +14,7 @@ from json import dumps
 from docker_commands import get_log
 
 import job
+import agent
 
 class API(object):
     def __init__(self, postgres):
@@ -30,6 +28,12 @@ class API(object):
         else:          column=None;       value=None
 
         return self.postgres.get_users(column, value)
+      
+    def get_hosts(self):
+        return dumps({
+                      "hosts": [host.__dict__ for host in agent.get_agents()],
+                      "queued_task_count": self.postgres.get_queued_task_count()
+                      })
 
     def add_task(self, name=None, state=None, tag=None, dependency=None, parent_job=None, removed_parent_defaults=None,
                  image=None, command=None, entrypoint=None, cron=None, restartable=None, exitcodes=None, max_failures=None, delay=None,
@@ -327,11 +331,11 @@ class API(object):
     def delete_job(self, id=None, name=None, username=None, mode=0):
         return job.delete_job(id, name, username, mode)
       
-    def queue_job(self, id=None, name=None, username=None, mode=0):
-        return job.queue_job(id, name, username, mode)
+    def queue_job(self, id=None, name=None, username=None, state=""):
+        return job.queue_job(id, name, username, state)
     
-    def stop_job(self, id=None, name=None, username=None):
-        return job.stop_job(id, name, username)
+    def stop_job(self, id=None, name=None, username=None, state=""):
+        return job.stop_job(id, name, username, state)
     
     def update_job(
                     self,

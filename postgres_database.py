@@ -198,7 +198,7 @@ def create_task_history_table(postgres_connection):
     CREATE TABLE task_history (
         run_id                   serial        PRIMARY KEY,
         task_id                  integer       NOT NULL,
-        name                     varchar(100)  NOT NULL,
+        name                     varchar()     NOT NULL,
         description              varchar       NOT NULL DEFAULT '',
         tags                     varchar[]     NOT NULL DEFAULT '{}',
         result_state             varchar(10),
