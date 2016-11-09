@@ -19,6 +19,20 @@ body {
     color: grey;
 }
 
+.color-primary {
+    color: #2fa4e7;
+}
+
+.background-danger {
+    background: #c71c22;
+    color: white;
+}
+
+.background-primary {
+    background: #2fa4e7;
+    color: white;
+}
+
 #navbar {
     cursor: default;
 }
@@ -125,6 +139,7 @@ body {
 
 .host_card .host_ip {
     font-size: 20px;
+    color: black;
 }
 
 .host_card .host_specs {
@@ -154,6 +169,12 @@ body {
     text-align: left;
     overflow-x: hidden;
     overflow-y: auto;
+}
+
+.active-host, .terminated-host {
+    width: auto;
+    height: auto;
+    margin-bottom: 10px;
 }
 
 #switch {

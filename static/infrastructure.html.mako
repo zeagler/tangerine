@@ -38,7 +38,7 @@
         </script>
     </head>
     
-    <body>                
+    <body style="background: rgba(203, 203, 210, 0.15);">                
         <nav id="navbar" class="navbar navbar-default navbar-static-top" style="max-height: 50px;">
             <div class="container-fluid">
                 <ul class="nav navbar-nav">

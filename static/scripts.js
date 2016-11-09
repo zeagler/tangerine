@@ -192,21 +192,22 @@ function loadHosts() {
                 if ($hosts[i].state == "inactive") {
                     var date = new Date($hosts[i].agent_termination_time*1000);
                     hosts_updated +=
-                    '<div class="host_card panel panel-danger">' +
-                        '<div class="panel-heading">' +
+                    '<div class="host_card panel panel-default">' +
+                        '<div class="panel-body">' +
                             '<p class="host_ip">' + $hosts[i].host_ip + '</p>' +
                             '<p class="host_specs">' + $hosts[i].instance_type + ' | ' + ($hosts[i].available_memory/1024/1024).toFixed(2) + 'GB</p>' +
+                            '<div class="active-host background-danger">Terminated: ' + date.getHours() + ':' + ("0" + date.getMinutes()).substr(-2) + '</div>' +
                             '<div class="well">' + tasks + '</div>' +
-                            '<p class="host_termination">Terminated: ' + date.getHours() + ':' + ("0" + date.getMinutes()).substr(-2) + '</p>' +
                         '</div>' +
                     '</div>'
                 } else {
                     host_count++;
                     hosts_updated +=
-                    '<div class="host_card panel panel-primary">' +
-                        '<div class="panel-heading">' +
+                    '<div class="host_card panel panel-default">' +
+                        '<div class="panel-body">' +
                             '<p class="host_ip">' + $hosts[i].host_ip + '</p>' +
                             '<p class="host_specs">' + $hosts[i].instance_type + ' | ' + ($hosts[i].available_memory/1024/1024).toFixed(2) + 'GB</p>' +
+                            '<div class="active-host background-primary">Active</div>' +
                             '<div class="well">' + tasks + '</div>' +
                         '</div>' +
                     '</div>'
