@@ -241,6 +241,17 @@ class API(object):
             a json response of all the tasks
         """
         return dumps([task.__dict__ for task in self.postgres.get_tasks()])
+        
+    def get_tasks_summary(self):
+        """
+        Get the information of all tasks in the database
+        
+        Args: None
+        
+        Return:
+            a json response of all the tasks
+        """
+        return dumps([task.__dict__ for task in self.postgres.get_tasks_summary()])
       
     def get_runs(self):
         """
@@ -292,6 +303,9 @@ class API(object):
     #
     def get_jobs(self, id=None, name=None, column=None, value=None):
         return dumps([j.__dict__ for j in job.get_jobs(id, name, column, value)])
+
+    def get_jobs_summary(self):
+        return dumps([j.__dict__ for j in job.get_jobs()])
       
     def get_job_object(self, id=None, name=None):
         """

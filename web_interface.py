@@ -149,7 +149,7 @@ class Statuspage(object):
         if cherrypy.session.get("login_msg", None) == "AJAX not authorized":
             return '{"redirect": "/login"}'
           
-        return '{"tasks": ' + API.get_tasks() + ', "jobs": ' + API.get_jobs() + '}'
+        return '{"tasks": ' + API.get_tasks_summary() + ', "jobs": ' + API.get_jobs_summary() + '}'
         
     
     @cherrypy.expose

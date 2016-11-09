@@ -103,6 +103,25 @@ class Postgres():
         
         self.conn.commit()
         return [Task(self.columns, task) for task in cur.fetchall()]
+      
+    def get_tasks_summary(self):
+        """
+        Get all tasks whose column matches input value
+        
+        Args:
+            column: The column that will be searched
+            value: The required value of the column
+        
+        Returns:
+            A list of Task objects, one for each row that satisfies column=value
+        """
+        columns = ["id", "name", "state", "warning", "warning_message", "parent_job", "tags"]
+        
+        cur = self.conn.cursor()
+        cur.execute("SELECT " + ", ".join(columns) + " FROM tangerine;")
+        self.conn.commit()
+        
+        return [Task([(column,) for column in columns], task, interpolate=False) for task in cur.fetchall()]
 
     def get_queued_task_count(self):
         query = "SELECT COUNT(id) FROM tangerine WHERE state='queued' OR state='ready' OR state='running' OR state='starting';"

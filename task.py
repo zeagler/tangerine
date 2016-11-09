@@ -20,7 +20,7 @@ class Task(object):
         update: Update this task's column in the postgreSQL task table
         waiting_on_dependencies: check if this task still has unmet dependencies
     """
-    def __init__(self, columns, values):
+    def __init__(self, columns, values, interpolate=True):
         """
         Set the initial attributes of this task object
 
@@ -30,44 +30,45 @@ class Task(object):
         for i in range(len(values)):
             setattr(self, columns[i][0], values[i])
 
-        # Interpolate variables
-        setattr(self, "command_raw", self.command)
-        if self.command:
-            self.command = self.command.replace("$$count", str(self.count))
-            self.command = self.command.replace("$$date", strftime("%Y%m%d"))
-            self.command = self.command.replace("$$time", strftime("%H%M%S"))
-        
-        setattr(self, "entrypoint_raw", self.entrypoint)
-        if self.entrypoint:
-            self.entrypoint = self.entrypoint.replace("$$count", str(self.count))
-            self.entrypoint = self.entrypoint.replace("$$date", strftime("%Y%m%d"))
-            self.entrypoint = self.entrypoint.replace("$$time", strftime("%H%M%S"))
-          
-        setattr(self, "environment_raw", copy.deepcopy(self.environment))
-        if self.environment:
-            for i in range(len(self.environment)):
-                self.environment[i][1] = self.environment[i][1].replace("$$count", str(self.count))
-                self.environment[i][1] = self.environment[i][1].replace("$$date", strftime("%Y%m%d"))
-                self.environment[i][1] = self.environment[i][1].replace("$$time", strftime("%H%M%S"))
-                
-                if self.command:
-                    self.command = self.command.replace("$$" + self.environment[i][0], self.environment[i][1])
+        if interpolate == True:
+            # Interpolate variables
+            setattr(self, "command_raw", self.command)
+            if self.command:
+                self.command = self.command.replace("$$count", str(self.count))
+                self.command = self.command.replace("$$date", strftime("%Y%m%d"))
+                self.command = self.command.replace("$$time", strftime("%H%M%S"))
+            
+            setattr(self, "entrypoint_raw", self.entrypoint)
+            if self.entrypoint:
+                self.entrypoint = self.entrypoint.replace("$$count", str(self.count))
+                self.entrypoint = self.entrypoint.replace("$$date", strftime("%Y%m%d"))
+                self.entrypoint = self.entrypoint.replace("$$time", strftime("%H%M%S"))
+              
+            setattr(self, "environment_raw", copy.deepcopy(self.environment))
+            if self.environment:
+                for i in range(len(self.environment)):
+                    self.environment[i][1] = self.environment[i][1].replace("$$count", str(self.count))
+                    self.environment[i][1] = self.environment[i][1].replace("$$date", strftime("%Y%m%d"))
+                    self.environment[i][1] = self.environment[i][1].replace("$$time", strftime("%H%M%S"))
+                    
+                    if self.command:
+                        self.command = self.command.replace("$$" + self.environment[i][0], self.environment[i][1])
 
-        # For the web interface
-        setattr(self, "dependencies_str", ', '.join(self.dependencies))
-        
-        if self.next_run_time: setattr(self, "next_run_str", datetime.fromtimestamp(self.next_run_time).strftime('%I:%M:%S%p %B %d, %Y'))
-        else: setattr(self, "next_run_str", "")
-        
-        if self.last_run_time: setattr(self, "last_run_str", datetime.fromtimestamp(self.last_run_time).strftime('%I:%M%p %B %d, %Y'))
-        else: setattr(self, "last_run_str", "")
-        
-        if self.last_success_time: setattr(self, "last_success_str", datetime.fromtimestamp(self.last_success_time).strftime('%I:%M%p %B %d, %Y'))
-        else: setattr(self, "last_success_str", "")
-        
-        if self.last_fail_time: setattr(self, "last_fail_str", datetime.fromtimestamp(self.last_fail_time).strftime('%I:%M%p %B %d, %Y'))
-        else: setattr(self, "last_fail_str", "")
-        
+            # For the web interface
+            setattr(self, "dependencies_str", ', '.join(self.dependencies))
+            
+            if self.next_run_time: setattr(self, "next_run_str", datetime.fromtimestamp(self.next_run_time).strftime('%I:%M:%S%p %B %d, %Y'))
+            else: setattr(self, "next_run_str", "")
+            
+            if self.last_run_time: setattr(self, "last_run_str", datetime.fromtimestamp(self.last_run_time).strftime('%I:%M%p %B %d, %Y'))
+            else: setattr(self, "last_run_str", "")
+            
+            if self.last_success_time: setattr(self, "last_success_str", datetime.fromtimestamp(self.last_success_time).strftime('%I:%M%p %B %d, %Y'))
+            else: setattr(self, "last_success_str", "")
+            
+            if self.last_fail_time: setattr(self, "last_fail_str", datetime.fromtimestamp(self.last_fail_time).strftime('%I:%M%p %B %d, %Y'))
+            else: setattr(self, "last_fail_str", "")
+            
         setattr(self, "json", dumps(self.__dict__))
 
     def __repr__(self):

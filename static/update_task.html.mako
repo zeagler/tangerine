@@ -32,6 +32,7 @@
      * Reset the form to it original values
      *
      * TODO: HIGHPRIORITY: environment and data volumes do not reset
+     * TODO: Store a copy of the json, rebuild the modal instead of using form reset
      ***/
     $('.reset-form').on('click', function(e) {
         e.preventDefault();
