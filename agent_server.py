@@ -17,7 +17,7 @@ from postgres_functions import Postgres
 from postgres_connection import close_connections
 from slack_functions import Slack
 from agent_web import start_agent_web
-from settings import Agent as options
+from settings import settings
 from job import get_jobs
 
 from requests.exceptions import ReadTimeout
@@ -221,7 +221,7 @@ def add_agent():
         print("Could not reserve an agent id")
         return
       
-    if options['DEVELOPMENT'] == True:
+    if settings['agent_development_mode'] == "true":
         import socket
         postgres.add_agent(
                           agent_id = agent_id,

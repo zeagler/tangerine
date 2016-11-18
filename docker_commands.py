@@ -5,7 +5,7 @@ In the future this will completely replace the Rancher module.
 
 from docker import Client
 from time import time
-from settings import Docker as options
+from settings import settings
 from subprocess import Popen, check_output
 
 def get_log(log_name, lines=200):
@@ -22,7 +22,7 @@ def get_log(log_name, lines=200):
         if not log_name:
             return '{"error": "log_name must be present"}'
         
-        log = check_output(["tail", "-n", str(lines), options["log_directory"] + "/" + log_name])
+        log = check_output(["tail", "-n", str(lines), settings["docker_log_directory"] + "/" + log_name])
         return log
     except Exception as e:
         print('{!r}; error trying to read log'.format(e))
@@ -101,9 +101,9 @@ class Docker(object):
         """ """
         if "quay.io" in image:
             if not self.login(
-                              registry="https://quay.io",
-                              username=options["username"],
-                              password=options["password"]
+                              registry=settings["docker_registry_url"],
+                              username=settings["docker_registry_username"],
+                              password=settings["docker_registry_password"]
                              ):
                 return False
             
@@ -174,7 +174,7 @@ class Docker(object):
     def record_log(self, containerId, log_name):
         """ """
         try:
-            f = open(options["log_directory"] + "/" + log_name + ".log", "w")
+            f = open(settings["docker_log_directory"] + "/" + log_name + ".log", "w")
             Popen(["docker", "logs", "-f", str(containerId)], stdout=f, stderr=f)
         except Exception as e:
             print('{!r}; error trying to record log'.format(e))

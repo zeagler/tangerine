@@ -16,9 +16,6 @@ from web_interface import start_web_interface
 
 if __name__ == '__main__':
     print("Starting Tangerine")
-    print("  postgreSQL table: " + settings.Postgresql['TASK_TABLE'])
-    print("     Slack webhook: " + settings.Slack['SLACK_WEBHOOK'])
-    print("Spot Fleet Request: " + settings.Amazon['SPOT_FLEET_REQUEST_ID'])
     
     if len(sys.argv) > 1:
         if (sys.argv[1] == "server"):

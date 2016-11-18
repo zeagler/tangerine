@@ -69,7 +69,7 @@ class Task(object):
             if self.last_fail_time: setattr(self, "last_fail_str", datetime.fromtimestamp(self.last_fail_time).strftime('%I:%M%p %B %d, %Y'))
             else: setattr(self, "last_fail_str", "")
             
-        setattr(self, "json", dumps(self.__dict__))
+            setattr(self, "json", dumps(self.__dict__))
 
     def __repr__(self):
         """Return a string representation of all the attributes of this task"""

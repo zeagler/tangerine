@@ -13,8 +13,11 @@ This module holds all of the API reference calls. It is served CherryPy from
 from json import dumps
 from docker_commands import get_log
 
-import job
 import agent
+import hook
+import job
+import settings
+import user
 
 class API(object):
     def __init__(self, postgres):
@@ -27,7 +30,7 @@ class API(object):
         elif usertype: column="usertype"; value=usertype
         else:          column=None;       value=None
 
-        return self.postgres.get_users(column, value)
+        return user.get_users(column, value)
       
     def get_hosts(self):
         return dumps({
@@ -363,3 +366,39 @@ class API(object):
                                 entrypoint, exitcodes, restartable, datavolumes, environment, image, cron,
                                 max_failures, delay, faildelay, port
                               )
+      
+    # Tangerine Services
+    
+    def hook(self, api_token):
+        """Execute a webhook"""
+        hooks = hook.get_hooks(api_token=api_token)
+        
+        if hooks:
+            h = hooks[0]
+            
+            if h.state == "inactive":
+                return dumps({"error": "Hook is not valid"})
+            
+            if h.action == "misfire":
+                for target in h.targets:
+                    self.queue_task(target, "webhook-" + str(h.id))
+                
+                return dumps({"success": "Hook actions were executed"})
+            
+            return dumps({"error": "Hook is not valid"})
+            
+        else:
+            return dumps({"error": "Could not get requested hook"})
+          
+    def set_setting(self, setting=None, value=None):
+        return dumps(settings.set_setting(setting, value))
+      
+    def update_user(self, userid, usertype):
+        return dumps(user.update_user(userid, usertype))
+      
+    def delete_user(self, userid):
+        return dumps(user.delete_user(userid))
+      
+    def add_user(self, username, userid, usertype):
+        return dumps(user.add_user(username, userid, usertype))
+        

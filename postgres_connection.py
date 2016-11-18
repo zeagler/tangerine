@@ -1,11 +1,15 @@
 """
 This module creates a connection to a postgreSQL database
 """
+from postgres_database import verify_database
 from psycopg2 import connect
-from settings import Postgresql as options
+import os
+import yaml
 
-global connections
+global connections, options
+
 connections = []
+options = yaml.safe_load(open(os.path.abspath(os.getcwd()) + "/config.yml"))["Postgresql"]
 
 def close_connections():
     """Close the postgreSQL database connections"""
@@ -22,7 +26,7 @@ class PGconnection():
       if it is not set as an enviroment variable.
     """
     def __init__(self):
-        global connections
+        global connections, options
         connections.append(self)
         
         setattr(self, "host", options['PGHOST'])
@@ -36,6 +40,7 @@ class PGconnection():
         if self.pswd: conn_str += " password="+self.pswd
         setattr(self, "conn_str", conn_str)
         self.reconnect()
+        verify_database(self.conn)
         
     def reconnect(self):
         """Connect to the postgres database"""

@@ -53,6 +53,16 @@ def check_tables(postgres_connection):
     if not cur.fetchone()[0]:
         create_agent_table(postgres_connection)
 
+    # Check if the webhook table exists, create it if it does not
+    cur.execute("select exists(select * from information_schema.tables where table_name='hooks')")
+    if not cur.fetchone()[0]:
+        create_hooks_table(postgres_connection)
+
+    # Check if the webhook table exists, create it if it does not
+    cur.execute("select exists(select * from information_schema.tables where table_name='settings')")
+    if not cur.fetchone()[0]:
+        create_settings_table(postgres_connection)
+
     postgres_connection.commit()
 
 
@@ -198,7 +208,7 @@ def create_task_history_table(postgres_connection):
     CREATE TABLE task_history (
         run_id                   serial        PRIMARY KEY,
         task_id                  integer       NOT NULL,
-        name                     varchar()     NOT NULL,
+        name                     varchar       NOT NULL,
         description              varchar       NOT NULL DEFAULT '',
         tags                     varchar[]     NOT NULL DEFAULT '{}',
         result_state             varchar(10),
@@ -237,7 +247,7 @@ def create_task_history_table(postgres_connection):
     );""")
     postgres_connection.commit()
 
-def create_options_table(postgres_connection):
+def create_settings_table(postgres_connection):
     """Create the table to store agent history"""
     #
     # TODO add docker registry options
@@ -247,23 +257,10 @@ def create_options_table(postgres_connection):
     #
     cur = postgres_connection.cursor()
     cur.execute("""
-    CREATE TABLE options (
-        scaling_enabled          boolean         NOT NULL DEFAULT false,
-        scaling_lower_limit      integer         NOT NULL DEFAULT 0,
-        scaling_upper_limit      integer         NOT NULL DEFAULT 10,
-        scaling_sfr_id           varchar         NOT NULL DEFAULT '',
-        
-        auth_type                varchar         NOT NULL DEFAULT 'github',
-        auth_id                  varchar         NOT NULL DEFAULT '',
-        auth_secret              varchar         NOT NULL DEFAULT '',
-        
-        slack_enabled            boolean         NOT NULL DEFAULT true,
-        slack_webhook            varchar         NOT NULL DEFAULT '',
-        
-        docker_registry          varchar[][5]    NOT NULL DEFAULT '{}',
-        docker_log_directory     varchar         NOT NULL DEFAULT ''
+    CREATE TABLE settings (
+        setting_name             varchar       NOT NULL UNIQUE,
+        setting_value            varchar       NOT NULL
     );""")
-    # docker_registry: [name, registry_url, username, password, password_salt]
     
     postgres_connection.commit()
 
@@ -296,3 +293,16 @@ def create_notifications_table(postgres_connection):
     #TODO
     print("WIP")
       
+def create_hooks_table(postgres_connection):
+    """Create the table to store hooks"""
+    cur = postgres_connection.cursor()
+    cur.execute("""
+    CREATE TABLE hooks (
+        id                       serial        PRIMARY KEY,
+        action                   varchar       NOT NULL,
+        targets                  varchar[]     NOT NULL,
+        state                    varchar       NOT NULL DEFAULT 'active',
+        api_token                varchar       NOT NULL UNIQUE,
+        created                  integer,
+        last_used                integer
+    );""")

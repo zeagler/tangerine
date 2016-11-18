@@ -9,7 +9,7 @@ import json
 import cherrypy
 from cherrypy.lib.static import serve_file
 from hashlib import sha256
-from settings import Web as options
+from settings import settings
 from API import API
 from time import time
 
@@ -24,7 +24,7 @@ class Statuspage(object):
     def index(self):
         """Main page for Tangerine's web UI"""
         tmpl = lookup.get_template("index.html.mako")
-        if options['USE_AUTH']:
+        if settings['web_use_auth'] == "true":
             return tmpl.render(
                                 username = cherrypy.session['username'],
                                 userimageurl = cherrypy.session['userimageurl'],
@@ -34,7 +34,7 @@ class Statuspage(object):
             return tmpl.render(
                                 username = cherrypy.session.get("username", "dev"),
                                 userimageurl = cherrypy.session.get("userimageurl", "dev"),
-                                usertype = cherrypy.session.get("usertype", "dev")
+                                usertype = cherrypy.session.get("usertype", "admin")
                               )
 
     @cherrypy.expose
@@ -48,8 +48,8 @@ class Statuspage(object):
             # First check that the code is valid
             # Query GitHub for an access token for the code
             git_auth = "https://github.com/login/oauth/access_token?" + \
-                       "client_id=" + options['GITHUB_OAUTH_ID'] + \
-                       "&client_secret=" + options['GITHUB_OAUTH_SECRET'] + \
+                       "client_id=" + settings['web_github_oauth_id'] + \
+                       "&client_secret=" + settings['web_github_oauth_secret'] + \
                        "&code=" + code
             
             req = Request(git_auth)
@@ -124,14 +124,14 @@ class Statuspage(object):
         cherrypy.session.regenerate()
         tmpl = lookup.get_template("login.html.mako")
         return tmpl.render(
-                            client_id = options['GITHUB_OAUTH_ID'],
+                            client_id = settings['web_github_oauth_id'],
                             msg = cherrypy.session.get("login_msg", None)
                            )
 
     @cherrypy.expose
     def history(self):
         tmpl = lookup.get_template("history.html.mako")
-        if options['USE_AUTH']:
+        if settings['web_use_auth'] == "true":
             return tmpl.render(
                                 username = cherrypy.session['username'],
                                 userimageurl = cherrypy.session['userimageurl'],
@@ -141,8 +141,32 @@ class Statuspage(object):
             return tmpl.render(
                                 username = cherrypy.session.get("username", "dev"),
                                 userimageurl = cherrypy.session.get("userimageurl", "dev"),
-                                usertype = cherrypy.session.get("usertype", "dev")
+                                usertype = cherrypy.session.get("usertype", "admin")
                               )
+
+    @cherrypy.expose
+    def admin(self):
+        # Check if the user is an admin
+        if cherrypy.session.get("usertype", "user") == "admin":
+            tmpl = lookup.get_template("admin.html.mako")
+            if settings['web_use_auth'] == "true":
+                return tmpl.render(
+                                    username = cherrypy.session['username'],
+                                    userimageurl = cherrypy.session['userimageurl'],
+                                    usertype = cherrypy.session['usertype'],
+                                    settings = settings,
+                                    users = API.get_users()
+                                  )
+            else:
+                return tmpl.render(
+                                    username = cherrypy.session.get("username", "dev"),
+                                    userimageurl = cherrypy.session.get("userimageurl", "dev"),
+                                    usertype = cherrypy.session.get("usertype", "admin"),
+                                    settings = settings,
+                                    users = API.get_users()
+                                  )
+        else:
+            return json.dumps({"error": "User not authorized for this request"})
     
     @cherrypy.expose
     def get_project(self):
@@ -277,7 +301,7 @@ class Statuspage(object):
     @cherrypy.expose
     def infrastructure(self):
         tmpl = lookup.get_template("infrastructure.html.mako")
-        if options['USE_AUTH']:
+        if settings['web_use_auth'] == "true":
             return tmpl.render(
                                 username = cherrypy.session['username'],
                                 userimageurl = cherrypy.session['userimageurl'],
@@ -287,7 +311,7 @@ class Statuspage(object):
             return tmpl.render(
                                 username = cherrypy.session.get("username", "dev"),
                                 userimageurl = cherrypy.session.get("userimageurl", "dev"),
-                                usertype = cherrypy.session.get("usertype", "dev")
+                                usertype = cherrypy.session.get("usertype", "admin")
                               )
           
     @cherrypy.expose
@@ -361,7 +385,46 @@ class Statuspage(object):
                                 entrypoint, exitcodes, restartable, datavolumes, environment, image, cron,
                                 max_failures, delay, faildelay, port
                               )
+
+    @cherrypy.expose
+    def hook(self, api_token):
+        return API.hook(api_token)
+
+    @cherrypy.expose
+    def set_setting(self, setting=None, value=None):
+        # Check if the user is an admin
+        if cherrypy.session.get("usertype", "user") == "admin":
+            return API.set_setting(setting, value)
+        else:
+            return json.dumps({"error": "User not authorized for this request"})
+
+    @cherrypy.expose
+    def update_user(self, userid, usertype):
+        # Check if the user is an admin
+        if cherrypy.session.get("usertype", "user") == "admin":
+            return API.update_user(userid, usertype)
+        else:
+            return json.dumps({"error": "User not authorized for this request"})
+
+    @cherrypy.expose
+    def delete_user(self, userid):
+        # Check if the user is an admin
+        if cherrypy.session.get("usertype", "user") == "admin":
+            return API.delete_user(userid)
+        else:
+            return json.dumps({"error": "User not authorized for this request"})
       
+    @cherrypy.expose
+    def add_user(self, username, userid, usertype):
+        # Check if the user is an admin
+        if cherrypy.session.get("usertype", "user") == "admin":
+            return API.add_user(username, userid, usertype)
+        else:
+            return json.dumps({"error": "User not authorized for this request"})
+      
+    @cherrypy.expose
+    def ping(self):
+        return "pong"
       
 def secureheaders():
     headers = cherrypy.response.headers
@@ -386,7 +449,7 @@ def authenticate():
     path = cherrypy.request.path_info
     
     # Don't redirect if the user is going to the login page
-    if (path == "/login"):
+    if (path == "/login" or path == "/hook" or path == "/ping"):
         return
 
     # If the session is not authorized redirect the user to the login page
@@ -432,8 +495,15 @@ def authenticate():
         cherrypy.lib.sessions.expire()
         cherrypy.session["login_msg"] = "Session Expired"
         raise cherrypy.HTTPRedirect("login")
-        
-    
+
+def dev_user():
+    if cherrypy.session.get("authorized", None) == None:
+        cherrypy.session["authorized"] = "true"
+        cherrypy.session["userid"] = "0"
+        cherrypy.session["username"] = "dev"
+        cherrypy.session["usertype"] = "admin"
+        cherrypy.session["userimageurl"] = ""
+
 def start_web_interface(pg):
     """
     Start the server
@@ -451,17 +521,15 @@ def start_web_interface(pg):
     #    '/favicon.ico': {'tools.staticfile.on': True, 'tools.staticfile.filename': os.path.abspath(os.getcwd()) + '/UI/static/favicon.ico'}
     #}
     
-    if options['USE_AUTH']:
-        use_auth = True
+    if settings['web_use_auth'] == "true":
+        cherrypy.tools.authenticate = cherrypy.Tool('before_handler', authenticate)
     else:
-        use_auth = False
+        cherrypy.tools.authenticate = cherrypy.Tool('before_handler', dev_user)
     
-    # Set the global config.
-    cherrypy.tools.authenticate = cherrypy.Tool('before_handler', authenticate)
     cherrypy.tools.secureheaders = cherrypy.Tool('before_finalize', secureheaders, priority=60)
     cherrypy.config.update({
                             #'environment': 'production',
-                            'tools.authenticate.on': use_auth,
+                            'tools.authenticate.on': True,
                             'tools.sessions.on': True,
                             'engine.autoreload.on': False,
                             'tools.sessions.timeout': 45,
@@ -471,19 +539,14 @@ def start_web_interface(pg):
                             'server.socket_host': '0.0.0.0',
                             'server.socket_port': 443,
                             'server.ssl_module': 'builtin',
-                            'server.ssl_certificate': options['SSL_CERTIFICATE'],
-                            'server.ssl_private_key': options['SSL_PRIVATE_KEY'],
-                            'server.ssl_certificate_chain': options['SSL_CERTIFICATE_CHAIN'],
+                            'server.ssl_certificate': settings['web_ssl_cert_path'],
+                            'server.ssl_private_key': settings['web_ssl_key_path'],
+                            'server.ssl_certificate_chain': settings['web_ssl_chain_path'],
                            })
 
     #cherrypy.tree.mount(Statuspage(), config=conf) # for static files without Nginx
     cherrypy.tree.mount(Statuspage())
 
-    # Make 2nd server to redirect HTTP to HTTPS
-    http_server = cherrypy._cpserver.Server()
-    http_server.socket_host = '0.0.0.0'
-    http_server.socket_port=80
-    http_server.subscribe()
 
     print("Staring Web Server")
     cherrypy.engine.start()

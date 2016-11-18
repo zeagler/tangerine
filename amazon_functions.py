@@ -4,7 +4,7 @@ This module has functions to scale Spot Fleet Requests and terminate
 """
 from base64 import b64encode
 from boto3 import client
-from settings import Amazon as options
+from settings import settings
 
 class Amazon():
     def __init__(self):
@@ -59,13 +59,13 @@ class Amazon():
             response = self.ec2.terminate_instances(InstanceIds=[instance_id])
 
     def enabled(self):
-        return options['ENABLED']
+        return settings['ec2_scaling_enabled'] == "true"
       
     def scale_limit(self):
-        return options['EC2_SCALE_LIMIT']
+        return int(settings['ec2_scale_limit'])
       
     def spot_fleet_request_id(self):
-        return options['SPOT_FLEET_REQUEST_ID']
+        return settings['spot_fleet_request_id']
       
     def create_instance(self, profile):
         """

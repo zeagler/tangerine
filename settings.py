@@ -7,106 +7,147 @@ TODO: save settings in the database
 import os
 import yaml
 
-global config, Amazon, Agent, Docker, Web, Postgresql, Slack, Rancher
-config = yaml.safe_load(open(os.path.abspath(os.getcwd()) + "/config.yml"))
+global settings
+settings = {}
+
+from postgres_functions import Postgres
+global postgres
+postgres = Postgres()
 
 def check_agent():
     """Check that the Agent settings are proper"""
-    global Agent
-    Agent = config['Agent']
-    
-    if 'DEVELOPMENT' not in Agent.keys(): Agent['DEVELOPMENT'] = False
-    
-    if not Agent['DEVELOPMENT'] == True:   Agent['DEVELOPMENT'] = False
+    global settings
+
+    if 'agent_development_mode' not in settings.keys():
+        set_setting("agent_development_mode", "false")
 
 def check_amazon():
     """Check that the Amazon settings are proper"""
-    global Amazon
-    Amazon = config['Amazon']
+    global settings
 
-    if 'ENABLED' not in Amazon.keys():               Amazon['ENABLED'] = False
-    if 'EC2_SCALE_LIMIT' not in Amazon.keys():       Amazon['EC2_SCALE_LIMIT'] = 20
-    if 'SPOT_FLEET_REQUEST_ID' not in Amazon.keys(): Amazon['ENABLED'] = False; Amazon['SPOT_FLEET_REQUEST_ID'] = ""
+    if 'ec2_scaling_enabled' not in settings.keys():
+        set_setting("ec2_scaling_enabled", "false")
 
-    if not Amazon['ENABLED']:                        Amazon['ENABLED'] = False
-    if not Amazon['EC2_SCALE_LIMIT']:                Amazon['EC2_SCALE_LIMIT'] = 20
-    if not Amazon['SPOT_FLEET_REQUEST_ID']:          Amazon['ENABLED'] = False; Amazon['SPOT_FLEET_REQUEST_ID'] = ""
+    if 'ec2_scale_limit' not in settings.keys():
+        set_setting("ec2_scale_limit", "10")
+
+    if 'spot_fleet_request_id' not in settings.keys():
+        set_setting("ec2_scaling_enabled", "false")
+        set_setting("spot_fleet_request_id", "")
 
 def check_docker():
     """Check that the Docker settings are proper"""
-    global Docker
-    Docker = config['Docker']
+    global settings
 
-def check_postgresql():
-    """Check that the Postgresql settings are proper"""
-    global Postgresql
-    Postgresql = config['Postgresql']
+    if 'docker_log_directory' not in settings.keys():
+        set_setting("docker_log_directory", "/logs")
 
-    if 'PGHOST' not in Postgresql.keys():     print("PGHOST is not set"); exit(1)
-    if 'PGUSER' not in Postgresql.keys():     print("PGUSER is not set"); exit(1)
-    if 'PGPORT' not in Postgresql.keys():     Postgresql['PGPORT'] = "5432"
-    if 'PGPASS' not in Postgresql.keys():     Postgresql['PGPASS'] = ""
-    if 'PGDATABASE' not in Postgresql.keys(): Postgresql['PGDATABASE'] = Postgresql['PGUSER']
-    if 'TASK_TABLE' not in Postgresql.keys(): Postgresql['TASK_TABLE'] = "tangerine"
+    if 'docker_registry_url' not in settings.keys():
+        set_setting("docker_registry_url", "")
 
-    if not Postgresql['PGHOST']:              print("PGHOST is not set"); exit(1)
-    if not Postgresql['PGUSER']:              print("PGUSER is not set"); exit(1)
-    if not Postgresql['PGPORT']:              Postgresql['PGPORT'] = "5432"
-    if not Postgresql['PGDATABASE']:          Postgresql['PGDATABASE'] = Postgresql['PGUSER']
-    if not Postgresql['TASK_TABLE']:          Postgresql['TASK_TABLE'] = "tangerine"
+    if 'docker_registry_username' not in settings.keys():
+        set_setting("docker_registry_username", "")
 
-def check_rancher():
-    """Check that the Rancher settings are proper"""
-    global Rancher
-    Rancher = config['Rancher']
+    if 'docker_registry_password' not in settings.keys():
+        set_setting("docker_registry_password", "")
 
-    if 'CATTLE_URL' not in Rancher.keys():           print("CATTLE_URL is not set"); exit(1)
-    if 'CATTLE_ACCESS_KEY' not in Rancher.keys():    print("CATTLE_ACCESS_KEY is not set"); exit(1)
-    if 'CATTLE_SECRET_KEY' not in Rancher.keys():    print("CATTLE_SECRET_KEY is not set"); exit(1)
-    if 'HOST_LABEL' not in Rancher.keys():           Rancher['HOST_LABEL'] = "tangerine"
-    if 'TASK_STACK' not in Rancher.keys():           Rancher['TASK_STACK'] = "Tangerine"
-    if 'SIDEKICK_SCRIPT_PATH' not in Rancher.keys(): print("SIDEKICK_SCRIPT_PATH is not set"); exit(1)
-
-    if not Rancher['CATTLE_URL']:                    print("CATTLE_URL is not set"); exit(1)
-    if not Rancher['CATTLE_ACCESS_KEY']:             print("CATTLE_ACCESS_KEY is not set"); exit(1)
-    if not Rancher['CATTLE_SECRET_KEY']:             print("CATTLE_SECRET_KEY is not set"); exit(1)
-    if not Rancher['HOST_LABEL']:                    Rancher['HOST_LABEL'] = "tangerine"
-    if not Rancher['TASK_STACK']:                    Rancher['TASK_STACK'] = "Tangerine"
-    if not Rancher['SIDEKICK_SCRIPT_PATH']:          print("SIDEKICK_SCRIPT_PATH is not set"); exit(1)
+def check_postgres():
+    """Check that the postgres settings are set"""
+    global settings, postgres
+    
+    if 'postgres_host' not in settings.keys():
+        set_setting("postgres_host", postgres.postgres.host)
+        
+    if 'postgres_user' not in settings.keys():
+        set_setting("postgres_user", postgres.postgres.user)
+        
+    if 'postgres_port' not in settings.keys():
+        set_setting("postgres_port", postgres.postgres.port)
+        
+    if 'postgres_dbname' not in settings.keys():
+        set_setting("postgres_dbname", postgres.postgres.dbname)
 
 def check_slack():
     """Check that the Slack settings are proper"""
-    global Slack
-    Slack = config['Slack']
+    global settings
 
-    if 'ENABLED' not in Slack.keys():       Slack['ENABLED'] = False; Slack['SLACK_WEBHOOK'] = ""; return
-    if 'SLACK_WEBHOOK' not in Slack.keys(): Slack['ENABLED'] = False; Slack['SLACK_WEBHOOK'] = ""; return
+    if 'slack_enabled' not in settings.keys():
+        set_setting("slack_enabled", "false")
 
-    if not Slack['ENABLED']:                Slack['ENABLED'] = False; Slack['SLACK_WEBHOOK'] = ""; return
-    if not Slack['SLACK_WEBHOOK']:          Slack['ENABLED'] = False; Slack['SLACK_WEBHOOK'] = "";
+    if 'slack_webhook' not in settings.keys():
+        set_setting("slack_enabled", "false")
+        set_setting("slack_webhook", "")
 
 def check_web_interface():
     """Check that the Authorization settings are proper"""
-    global Web
-    Web = config['Web']
+    global settings
 
-    if 'USE_AUTH' not in Web.keys():              Web['USE_AUTH'] = True
-    if 'GITHUB_OAUTH_ID' not in Web.keys():       print("GITHUB_OAUTH_ID is not set"); exit(1)
-    if 'GITHUB_OAUTH_SECRET' not in Web.keys():   print("GITHUB_OAUTH_SECRET is not set"); exit(1)
-    if 'SSL_CERTIFICATE' not in Web.keys():       print("SSL_CERTIFICATE is not set, SSL is required for now"); exit(1)
-    if 'SSL_PRIVATE_KEY' not in Web.keys():       print("SSL_PRIVATE_KEY is not set, SSL is required for now"); exit(1)
-    if 'SSL_CERTIFICATE_CHAIN' not in Web.keys(): Web['SSL_CERTIFICATE_CHAIN'] = ""
+    if 'web_use_auth' not in settings.keys():
+        set_setting("web_use_auth", "false")
 
-    if not Web['USE_AUTH'] == True:               Web['USE_AUTH'] = False
-    if not Web['GITHUB_OAUTH_ID']:                print("GITHUB_OAUTH_ID is not set"); exit(1)
-    if not Web['GITHUB_OAUTH_SECRET']:            print("GITHUB_OAUTH_ID is not set"); exit(1)
-    if not Web['SSL_CERTIFICATE']:                print("SSL_CERTIFICATE is not set, SSL is required for now"); exit(1)
-    if not Web['SSL_PRIVATE_KEY']:                print("SSL_PRIVATE_KEY is not set, SSL is required for now"); exit(1)
+    if 'web_use_ssl' not in settings.keys():
+        set_setting("web_use_ssl", "true")
+        
+    if 'web_github_oauth_id' not in settings.keys():
+        set_setting("web_github_oauth_id", "")
 
+    if 'web_github_oauth_secret' not in settings.keys():
+        set_setting("web_github_oauth_secret", "")
+
+    if 'web_ssl_cert_path' not in settings.keys():
+        set_setting("web_ssl_cert_path", "cert.pem")
+
+    if 'web_ssl_key_path' not in settings.keys():
+        set_setting("web_ssl_key_path", "privkey.pem")
+
+    if 'web_ssl_chain_path' not in settings.keys():
+        set_setting("web_ssl_chain_path", "")
+
+def load_settings():
+    query = "SELECT setting_name, setting_value FROM settings;"
+    result = postgres.execute(query)
+
+    if result:
+        for setting in result.fetchall():
+            settings[setting[0]] = setting[1]
+    else:
+        print("Error: Couldn't load settings from database")
+        exit()
+
+def set_setting(setting_name, setting_value):
+    if setting_name in settings.keys():
+        query = "UPDATE settings SET setting_value='" + str(setting_value) + "' WHERE setting_name='" + setting_name + "';"
+    else:
+        query = "INSERT INTO settings VALUES ('" + setting_name + "', '" + str(setting_value) + "');"
+        
+    result = postgres.execute(query)
+    
+    if result:
+        settings[setting_name] = setting_value
+        return({"success": "Setting was updated"})
+    else:
+        return({"error": "Couldn't update setting"})
+
+def set_settings(settings_name, values):
+    if type(settings_name) is not list:
+        return set_setting(settings_name, values)
+    else:
+        for i in range(len(settings_name)):
+            set_setting(settings_name[i], values[i])
+        
+        for i in range(len(settings_name)):
+            if not settings[settings_name[i]] == values[i]:
+                return({"error": "Some settings failed to update"})
+        
+        return({"success": "Settings were updated"})
+    
+def get_settings():
+    return settings
+
+load_settings()
 check_agent()
 check_amazon()
 check_docker()
-check_postgresql()
-check_rancher()
+check_postgres()
 check_slack()
 check_web_interface()

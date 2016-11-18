@@ -9,7 +9,6 @@ This module has functions to connect to a postgreSQL database
 from time import mktime, strftime, time
 from task import Task
 from run import Run
-from user import User
 from postgres_connection import PGconnection
 from postgres_database import verify_database
 
@@ -23,6 +22,7 @@ class Postgres():
     """
     def __init__(self):
         postgres = PGconnection()
+        setattr(self, "postgres", postgres)
         setattr(self, "conn", postgres.conn)
 
         verify_database(self.conn)
@@ -47,6 +47,9 @@ class Postgres():
         
         cur.execute("select column_name from information_schema.columns where table_name='host_configurations';")
         setattr(self, "host_configuration_columns", cur.fetchall())
+        
+        cur.execute("select column_name from information_schema.columns where table_name='hooks';")
+        setattr(self, "hook_columns", cur.fetchall())
         
         self.conn.commit()
     
@@ -488,29 +491,6 @@ class Postgres():
         cur.execute(query)
         self.conn.commit()
         return cur.fetchone()[0]
-      
-    #
-    # Users
-    #
-    def get_users(self, column=None, value=None):
-        """
-        Get information on users
-        
-        Args: 
-            column: The column that will be searched
-            value: The required value of the column
-        
-        Returns:
-            A list of User objects, one for each row that satisfies column=value
-        """
-        cur = self.conn.cursor()
-        query = "SELECT * FROM authorized_users"
-        if column:
-            query += " WHERE " + column + "='" + (value if value else "NULL") + "'"
-        
-        cur.execute(query+";")
-        self.conn.commit()
-        return [User(self.user_columns, user) for user in cur.fetchall()]
     
     #
     # Agents

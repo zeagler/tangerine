@@ -46,11 +46,11 @@
                     <li class="active"><a>Overview</a></li>
                     <li><a href="/history">History</a></li>
                     <li><a href="/infrastructure">Infrastructure</a></li>
+                    % if usertype == "admin":
+                        <li><a href="/admin">Admin</a></li>
+                    % endif
                 </ul>
                 <ul class="nav navbar-nav navbar-right">
-                    % if usertype == "admin":
-                        <li><a>Admin</a></li>
-                    % endif
                     <li>
                         <p id="nav_user" class="navbar-text dropdown-toggle" data-toggle="dropdown">
                             <img alt="${username}" src="${userimageurl}" style="height: 24px; width: 24px;"> ${username}

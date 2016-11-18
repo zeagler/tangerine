@@ -4,7 +4,7 @@ This module serves as the web interface for Tangerine. The webpage
   through GitHub oauth.
 """
 import cherrypy
-from settings import Web as options
+from settings import settings
 
 from mako.template import Template
 from mako.lookup import TemplateLookup
@@ -67,9 +67,9 @@ def start_agent_web(agent_key):
                             'server.socket_host': '0.0.0.0',
                             'server.socket_port': 443,
                             'server.ssl_module': 'builtin',
-                            'server.ssl_certificate': options['SSL_CERTIFICATE'],
-                            'server.ssl_private_key': options['SSL_PRIVATE_KEY'],
-                            'server.ssl_certificate_chain': options['SSL_CERTIFICATE_CHAIN'],
+                            'server.ssl_certificate': settings['web_ssl_cert_path'],
+                            'server.ssl_private_key': settings['web_ssl_key_path'],
+                            'server.ssl_certificate_chain': settings['web_ssl_chain_path'],
                            })
     
     cherrypy.tree.mount(Agent_Server(agent_key))
