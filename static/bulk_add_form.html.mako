@@ -505,10 +505,10 @@
     function createTaskRequest(task) {
         // Start serializing the object
         
-        form = "name=" + task.name
+        form = "name=" + encodeURIComponent(task.name)
         
         if (typeof(task.parent_job) != 'undefined')
-            form += "&parent_job=" + task.parent_job
+            form += "&parent_job=" + encodeURIComponent(task.parent_job)
         
         fields = ["description", "image", "command", "entrypoint",
                   "cron", "exitcodes", "max_failures", "delay", "faildelay"]
@@ -519,7 +519,7 @@
             if (typeof(task[field]) == "undefined")
                 continue
             else
-                form += "&" + field + "=" + task[field]
+                form += "&" + field + "=" + encodeURIComponent(task[field])
         }
         
         form += "&state=stopped";
@@ -530,27 +530,27 @@
         // Add each environment variable to the request string
         $.each(task.environment, function(env_key, env_value) {
             if (env_value != "")
-                form += "&environment=" + env_key + "=" + env_value;
+                form += "&environment=" + encodeURIComponent(env_key + "=" + env_value);
         });
         
         $.each(task.removed_parent_defaults, function(i, rpd) {
-            form += "&removed_parent_defaults=" + rpd;
+            form += "&removed_parent_defaults=" + encodeURIComponent(rpd);
         });
         
         // Add each data volume to the request string
         $.each(task.datavolumes, function(dvl_key, dvl_value) {
             if (dvl_key != "" && dvl_value != "")
-                form += "&datavolumes=" + dvl_key + ":" + dvl_value;
+                form += "&datavolumes=" + encodeURIComponent(dvl_key + ":" + dvl_value);
         });
          
         // Add each tag to the request string
         $.each(task.tags, function(i, tag) {
-            form += "&tag=" + tag;
+            form += "&tag=" + encodeURIComponent(tag);
         });
         
         // Add each dependencies to the request string
         $.each(task.dependencies, function(i, dep) {
-            form += "&dependency=" + dep;
+            form += "&dependency=" + encodeURIComponent(dep);
         });
         
         return form

@@ -164,7 +164,15 @@ def add_job(
     columns = {}
         
     columns["name"] = name
-    columns["state"] = state
+    
+    if state == "queued":
+        if delay == None or str(delay) == "0":
+            columns["state"] = state
+        else:
+            columns["state"] = "waiting"
+            columns["next_run_time"] = str(int(time())+int(delay))
+    else:
+        columns["state"] = state
     
     if not job_tags == None:     columns["tags"]                    = "{"+job_tags+"}"
     if not dep == None:          columns["dependencies"]            = "{"+dep+"}"
@@ -193,9 +201,12 @@ def add_job(
         job = get_jobs(name=name)[0]
         
         if job:
-            job.initialize()
+            if state == "queued" and not delay == None:
+                job.set_modified_time()
+            else:
+                job.initialize()
             return dumps(job.__dict__)
-
+          
     return dumps({"error": "Could not add job"})
 
 def update_job(

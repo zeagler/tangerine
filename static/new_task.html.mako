@@ -128,10 +128,10 @@
         // Are the data-volumes valid?
       
         // Start serializing the form with the name
-        form = "name=" + $("#name").val()
+        form = "name=" + encodeURIComponent($("#name").val())
         
         if ($("#parent_job").val() != "NULL")
-            form += "&parent_job=" + $("#parent_job").val()
+            form += "&parent_job=" + encodeURIComponent($("#parent_job").val())
         
         fields = ["description", "image", "command", "entrypoint",
                   "state", "cron", "exitcodes", "max_failures", "delay", "faildelay"]
@@ -142,7 +142,7 @@
             if ($("#" + field).val() == "" || $("#" + field).prop("disabled"))
                 continue
             else
-                form += "&" + field + "=" + $("#" + field).val()
+                form += "&" + field + "=" + encodeURIComponent($("#" + field).val())
         }
         
         form += "&restartable=" + $('#restartable')[0].checked
@@ -150,41 +150,41 @@
         // Add each environment variable to the request string
         $('.env').each(function(i, obj) {
             if ($(obj).find("input")[0].value !== "") {
-                form += "&environment=" + $(obj).find("input")[0].value + "=" + $(obj).find("input")[1].value;
+                form += "&environment=" + encodeURIComponent($(obj).find("input")[0].value + "=" + $(obj).find("input")[1].value);
             }
         });
         $('.job_env').each(function(i, obj) {
             if ($(obj).find("input")[1].value !== "") {
-                form += "&environment=" + $(obj).find("input")[0].value + "=" + $(obj).find("input")[1].value;
+                form += "&environment=" + encodeURIComponent($(obj).find("input")[0].value + "=" + $(obj).find("input")[1].value);
             }
         });
         $('.removed-default.job_env').each(function(i, obj) {
-            form += "&removed_parent_defaults=" + $(obj).find("input")[0].value;
+            form += "&removed_parent_defaults=" + encodeURIComponent($(obj).find("input")[0].value);
         });
         
         // Add each data volume to the request string
         $('.dvl').each(function(i, obj) {
             if ($(obj).find("input")[0].value !== "" && $(obj).find("input")[1] !== "") {
-                form += "&datavolumes=" + $(obj).find("input")[0].value + ":" + $(obj).find("input")[1].value;
+                form += "&datavolumes=" + encodeURIComponent($(obj).find("input")[0].value) + ":" + encodeURIComponent($(obj).find("input")[1].value);
             }
         });
         $('.job_dvl').each(function(i, obj) {
             if ($(obj).find("input")[0].value !== "") {
-                form += "&datavolumes=" + $(obj).find("input")[0].value + ":" + $(obj).find("input")[1].value;
+                form += "&datavolumes=" + encodeURIComponent($(obj).find("input")[0].value) + ":" + encodeURIComponent($(obj).find("input")[1].value);
             }
         });
         $('.removed-default.job_dvl').each(function(i, obj) {
-            form += "&removed_parent_defaults=" + $(obj).find("input")[1].value;
+            form += "&removed_parent_defaults=" + encodeURIComponent($(obj).find("input")[1].value);
         });
                 
         // Add each tag to the request string
         $.each($('#add-tag').pillbox('items'), function(i, tag) {
-            form += "&tag=" + tag.value;
+            form += "&tag=" + encodeURIComponent(tag.value);
         });
         
         // Add each dependencies to the request string
         $.each($('#add-dep').pillbox('items'), function(i, dep) {
-            form += "&dependency=" + dep.value;
+            form += "&dependency=" + encodeURIComponent(dep.value);
         });
         
         // Send the request

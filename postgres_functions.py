@@ -218,6 +218,8 @@ class Postgres():
             else:
                 columns["state"] = "waiting"
                 columns["next_run_time"] = str(int(time())+int(delay))
+        else:
+            columns["state"] = state
         
         if not tag == None:          columns["tags"]                    = "{"+tag+"}"
         if not dep == None:          columns["dependencies"]            = "{"+dep+"}"

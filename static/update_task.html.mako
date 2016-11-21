@@ -133,12 +133,12 @@
       
         // Start serializing the form with the id and name
         if ($("#id").length)
-            form = "id=" + $("#id").val() + "&name=" + $("#name").val()
+            form = "id=" + $("#id").val() + "&name=" + encodeURIComponent($("#name").val())
         else
-            form = "name=" + $("#name").val()
+            form = "name=" + encodeURIComponent($("#name").val())
         
         if ($("#parent_job").val() != "NULL")
-            form += "&parent_job=" + $("#parent_job").val()
+            form += "&parent_job=" + encodeURIComponent($("#parent_job").val())
            
            
         // Only add these fields if they are not disbled
@@ -148,7 +148,7 @@
             if ($("#" + field).prop("disabled"))
                 continue
             else
-                form += "&" + field + "=" + $("#" + field).val()
+                form += "&" + field + "=" + encodeURIComponent($("#" + field).val())
         }
         
         // Only add these fields that are filled in and not disbled
@@ -167,45 +167,45 @@
         $('.env').each(function(i, obj) {
             if ($(obj).attr("class").indexOf("removed-default") >= 0) return true;
             if ($(obj).find("input")[0].value !== "") {
-                form += "&environment=" + $(obj).find("input")[0].value + "=" + $(obj).find("input")[1].value;
+                form += "&environment=" + encodeURIComponent($(obj).find("input")[0].value + "=" + $(obj).find("input")[1].value);
             }
         });
         $('.job_env').each(function(i, obj) {
             if ($(obj).attr("class").indexOf("removed-default") >= 0) return true;
             if ($(obj).find("input")[1].value !== "") {
-                form += "&environment=" + $(obj).find("input")[0].value + "=" + $(obj).find("input")[1].value;
+                form += "&environment=" + encodeURIComponent($(obj).find("input")[0].value + "=" + $(obj).find("input")[1].value);
             }
         });
         $('.removed-default.env, .removed-default.job_env').each(function(i, obj) {
-            form += "&removed_parent_defaults=env:" + $(obj).find("input")[0].value;
+            form += "&removed_parent_defaults=env:" + encodeURIComponent($(obj).find("input")[0].value);
         });
         
         // Add each data volume to the request string
         $('.dvl').each(function(i, obj) {
             if ($(obj).attr("class").indexOf("removed-default") >= 0) return true;
             if ($(obj).find("input")[0].value !== "" && $(obj).find("input")[1] !== "") {
-                form += "&datavolumes=" + $(obj).find("input")[0].value + ":" + $(obj).find("input")[1].value;
+                form += "&datavolumes=" + encodeURIComponent($(obj).find("input")[0].value + ":" + $(obj).find("input")[1].value);
             }
         });
         $('.job_dvl').each(function(i, obj) {
             if ($(obj).attr("class").indexOf("removed-default") >= 0) return true;
             if ($(obj).find("input")[0].value !== "") {
-                form += "&datavolumes=" + $(obj).find("input")[0].value + ":" + $(obj).find("input")[1].value;
+                form += "&datavolumes=" + encodeURIComponent($(obj).find("input")[0].value + ":" + $(obj).find("input")[1].value);
             }
         });
         $('.removed-default.dvl, .removed-default.job_dvl').each(function(i, obj) {
-            form += "&removed_parent_defaults=dvl:" + $(obj).find("input")[1].value;
+            form += "&removed_parent_defaults=dvl:" + encodeURIComponent($(obj).find("input")[1].value);
         });
         
         
         // Add each tag to the request string
         $.each($('#add-tag').pillbox('items'), function(i, tag) {
-            form += "&tag=" + tag.value;
+            form += "&tag=" + encodeURIComponent(tag.value);
         });
         
         // Add each dependencies to the request string
         $.each($('#add-dep').pillbox('items'), function(i, dep) {
-            form += "&dependency=" + dep.value;
+            form += "&dependency=" + encodeURIComponent(dep.value);
         });
         
         // Send the request
