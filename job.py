@@ -125,7 +125,7 @@ def add_job(
     # Parse enviroment, datavolumes, ports, and dependencies     
     if environment:
         if type(environment) is list:
-            env = ['{"' + e.split("=")[0] + '","' + e.split("=")[1].replace("'", "''") + '"}' for e in environment]
+            env = ['{"' + e.split("=")[0] + '","' + e.split("=", 1)[1].replace("'", "''") + '"}' for e in environment]
             env = ", ".join(env);
         else:
             env = '{"' + environment.split("=")[0] + '","' + environment.split("=", 1)[1].replace("'", "''") + '"}'

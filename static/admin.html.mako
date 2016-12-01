@@ -18,13 +18,14 @@
         <!-- Font Awesome  -->
         <link href="https://maxcdn.bootstrapcdn.com/font-awesome/4.6.3/css/font-awesome.min.css" rel="stylesheet" integrity="sha384-T8Gy5hrqNKT+hzMclPo118YTQO6cYprQmhrYwIiQ/3axmI1hQomh7Ud2hPOy8SP1" crossorigin="anonymous">
         
-        <!-- FuelUX, to be removed -->
-        <link href="https://www.fuelcdn.com/fuelux/3.13.0/css/fuelux.min.css" rel="stylesheet">
-        <script src="https://www.fuelcdn.com/fuelux/3.13.0/js/fuelux.min.js"></script>
-
         <!-- Typeahead -->
         <script src="https://twitter.github.io/typeahead.js/releases/latest/typeahead.bundle.js"></script>
 
+        <!-- Bootstrap table extension http://bootstrap-table.wenzhixin.net.cn -->
+        <link rel="stylesheet" href="//cdnjs.cloudflare.com/ajax/libs/bootstrap-table/1.11.0/bootstrap-table.min.css">
+        <script src="//cdnjs.cloudflare.com/ajax/libs/bootstrap-table/1.11.0/bootstrap-table.min.js"></script>
+        <script src="//cdnjs.cloudflare.com/ajax/libs/bootstrap-table/1.11.0/locale/bootstrap-table-zh-CN.min.js"></script>
+        
         <!-- Tangerine scriptes -->
         <script src="static/scripts.js"></script>
         
@@ -52,6 +53,135 @@
             % for user in users:
                   users[${user.userid}] = ${user.__dict__}
             % endfor
+            
+            var update_project = function() {
+                $.get('get_project', function(data) {
+                    json = JSON.parse(data);
+                    
+                    if (json.redirect) {
+                        window.location.href = json.redirect;
+                    } else {
+                        $tasks = json.tasks;
+                        $jobs = json.jobs;
+                    }
+                });
+            }
+            
+            var findTarget = function() {
+                return function findMatches(q, cb) {
+                    var matches, substringRegex;
+
+                    matches = [];
+
+                    // regex used to determine if a string contains the substring `q`
+                    substrRegex = new RegExp(q, 'i');
+
+                    // iterate through the pool of strings and for any string that
+                    // contains the substring `q`, add it to the `matches` array
+
+                    $.each($jobs, function(i, str) {
+                        if (substrRegex.test(str.name) && matches.indexOf(str.name) < 0) {
+                            matches.push("job:" + str.name);
+                        }
+                    });
+                    
+                    // TODO: Remove limitation:
+                    //       Children cannot be selected
+                    
+                    $.each($tasks, function(i, str) {
+                        if (substrRegex.test(str.name) && matches.indexOf(str.name) < 0) {
+                            if (str.parent_job == null)
+                                matches.push("task:" + str.name);
+                        }
+                    
+                        if (str.parent_job == null)
+                            $.each(str.tags, function(i, tag) {
+                                if (substrRegex.test(tag) && matches.indexOf(tag) < 0) {
+                                    matches.push("tag:" + tag);
+                                }
+                            })
+                    });
+
+                    cb(matches);
+                };
+            };
+            
+            var add_target_handler = function(button) {
+                section = "targets";
+                type = "target";
+                
+                $("#" + section).append('<span class="form-inline col-sm-10 pull-right added '+type+'"><span class="pull-left" style="width: 100%">' +
+                                            '<input class="input form-control target-val" style="width: 90%" type="text"> ' +
+                                            '<button class="btn btn-danger remove-this" >-</button>' +
+                                        '</span></span>');
+                
+                $('.remove-this').click(function(e) {
+                    e.preventDefault();
+                    $(this).parent().parent().remove();
+                });
+                
+                // Add type ahead for targets
+                $('#targets .input').typeahead({
+                    hint: false,
+                    highlight: true,
+                    minLength: 1
+                },
+                {
+                    name: 'targets',
+                    source: findTarget()
+                });
+                
+                // Fix style
+                $(".tt-input").css({"vertical-align": ""})
+                $(".twitter-typeahead").css({"display": ""})
+            }
+            
+            var add_subnet_handler = function(button) {
+                section = "subnets";
+                type = "subnet";
+                
+                $("#" + section).append('<span class="form-inline added '+type+'"><span class="pull-left" style="width: 100%">' +
+                                            '<input class="input form-control subnet-val" style="width: 90%" type="text"> ' +
+                                            '<button class="btn btn-danger remove-this" >-</button>' +
+                                        '</span></span>');
+                
+                $('.remove-this').click(function(e) {
+                    e.preventDefault();
+                    $(this).parent().parent().remove();
+                });
+            }
+            
+            var add_tag_handler = function(button) {
+                section = "tags";
+                type = "tag";
+                
+                $("#" + section).append('<span class="form-inline added '+type+'"><span class="pull-left" style="width: 100%">' +
+                                            '<input class="input form-control tag-key" style="width: 43%" type="text"> ' +
+                                            ' = ' + 
+                                            '<input class="input form-control tag-val" style="width: 43%" type="text"> ' +
+                                            '<button class="btn btn-danger remove-this" >-</button>' +
+                                        '</span></span>');
+                
+                $('.remove-this').click(function(e) {
+                    e.preventDefault();
+                    $(this).parent().parent().remove();
+                });
+            }
+            
+            var add_sg_handler = function(button) {
+                section = "sgs";
+                type = "sg";
+                
+                $("#" + section).append('<span class="form-inline added '+type+'"><span class="pull-left" style="width: 100%">' +
+                                            '<input class="input form-control sg-val" style="width: 90%" type="text"> ' +
+                                            '<button class="btn btn-danger remove-this" >-</button>' +
+                                        '</span></span>');
+                
+                $('.remove-this').click(function(e) {
+                    e.preventDefault();
+                    $(this).parent().parent().remove();
+                });
+            }
             
             function add_tooltip(object_id, message) {
                 $(object_id).attr("data-toggle", "tooltip");
@@ -141,16 +271,395 @@
                     $("#user-add-status").removeClass("hide").html("Could not find '" + $("#search-users-text").val() + "'").css({"color": "red"});
                 });
             }
+            
+            function addIncomingHook() {
+                $('.remove-this').click()
+                $('.add-more').click()
+                $('#addIncomingHook').modal('show');
+                $('[data-toggle="tooltip"]').tooltip();
+                $("#hook_err_alert").addClass("hide").html("");
+                
+                $(document).off('click', '#add-incoming-hook-confirm').on('click', '#add-incoming-hook-confirm', function (e) {
+                    $("#hook_err_alert").addClass("hide").html("");
+                    
+                    if ($('#new-hook-name').val() == "") {
+                        $("#hook_err_alert").removeClass("hide").html("Name cannot be empty");
+                        return
+                    }
+                    
+                    form = 'name=' + $('#new-hook-name').val()
+                    form += '&action=' + $('#new-hook-action').val()
+                    
+                    $.each($('.target-val'), function(i, tar) {
+                        form += "&target=" + encodeURIComponent(tar.value);
+                    });
+                        
+                    $.get('/add_incoming_hook?' + form, function(add_response) {
+                        var json = JSON.parse(add_response)
+                        if (typeof(json.error) != 'undefined') {
+                            // adding failed
+                            $("#hook_err_alert").removeClass("hide").html(json.error);
+                            return true;
+                        }
+                    
+                        // updating succeded
+                        $("#addIncomingHook").modal('hide');
+                        loadHooks()
+                    });
+                });
+            }
+            
+            function resetInstanceConfigModal() {
+                $('#new-config-id').val("")
+                $('#new-config-name').val("")
+                $('#new-config-default').prop("checked", false)
+                $('#new-config-ami').val("")
+                $('#new-config-key').val("")
+                $('#new-config-iam').val("")
+                $('#new-config-ebs-size').val("8")
+                $('#new-config-ebs-gp2').prop("checked", true)
+                $('#new-config-ebs-std').prop("checked", false)
+                $('#new-config-userdata').val("")
+                $('#new-config-type').val("t2.micro")
+                $('#new-config-spot').prop("checked", false)
+                $('#new-config-spot-bid').val("")
+                $('.remove-this').click()
+                $('.add-more').click()
+            }
+            
+            function addInstanceConfiguration() {
+                $('#addInstanceConfiguration').modal('show');
+                $('[data-toggle="tooltip"]').tooltip();
+                $("#config_err_alert").addClass("hide").html("");
+                
+                $(document).off('click', '#add-incoming-config-confirm').on('click', '#add-incoming-config-confirm', function (e) {
+                    $("#config_err_alert").addClass("hide").html("");
+                    
+                    if ($('#new-config-name').val() == "") {
+                        $("#config_err_alert").removeClass("hide").html("Name cannot be empty");
+                        return
+                    }
+                    
+                    if ($('#new-config-ami').val() == "") {
+                        $("#config_err_alert").removeClass("hide").html("AMI cannot be empty");
+                        return
+                    }
+                    
+                    if ($('#new-config-key').val() == "") {
+                        $("#config_err_alert").removeClass("hide").html("Key cannot be empty");
+                        return
+                    }
+                    
+                    if ($('#new-config-ebs-size').val() == "") {
+                        $("#config_err_alert").removeClass("hide").html("EBS size cannot be empty");
+                        return
+                    }
+                    
+                    if (! $.isNumeric($('#new-config-ebs-size').val())) {
+                        $("#config_err_alert").removeClass("hide").html("EBS must be an integer");
+                        return
+                    }
+                    
+                    if ($('#new-config-spot-bid').val() != "" && ! $.isNumeric($('#new-config-spot-bid').val())) {
+                        $("#config_err_alert").removeClass("hide").html("Spot bid must be an decimal");
+                        return
+                    }
+                    
+                    form = 'name=' + encodeURIComponent($('#new-config-name').val())
+                    form += '&default=' + $('#new-config-default').prop("checked")
+                    form += '&ami=' + encodeURIComponent($('#new-config-ami').val())
+                    form += '&key=' + encodeURIComponent($('#new-config-key').val())
+                    form += '&iam=' + encodeURIComponent($('#new-config-iam').val())
+                    form += '&ebssize=' + $('#new-config-ebs-size').val()
+                    
+                    if ($('#new-config-ebs-gp2').prop("checked")) {
+                        form += '&ebstype=gp2'
+                    } else if ($('#new-config-ebs-std').prop("checked")) {
+                        form += '&ebstype=std'
+                    }
+                    
+                    form += '&userdata=' + encodeURIComponent($('#new-config-userdata').val())
+                    form += '&instance_type=' + $('#new-config-type').val()
+                    
+                    if ($('#new-config-spot').prop("checked")) {
+                        form += '&spot=true'
+                    } else {
+                        form += '&spot=false'
+                    }
+                    
+                    form += '&bid=' + $('#new-config-spot-bid').val()
+                    
+                    $.each($('.subnet-val'), function(i, sub) {
+                        form += "&subnet=" + encodeURIComponent(sub.value);
+                    });
+                
+                    $.each($('.sg-val'), function(i, sg) {
+                        form += "&sg=" + encodeURIComponent(sg.value);
+                    });
+                
+                    $.each($('.tag'), function(i, tag) {
+                        if ($(this).find(".tag-key").val() == "") return;
+                        form += "&tag=" + encodeURIComponent($(this).find(".tag-key").val() + "=" + $(this).find(".tag-val").val());
+                    });
+                    
+                    if ($('#new-config-id').val() != "")
+                        form += '&id=' + $('#new-config-id').val()
+                    
+                    $.get('/add_instance_configuration?' + form, function(add_response) {
+                        var json = JSON.parse(add_response)
+                        
+                        if (typeof(json.error) != 'undefined') {
+                            // adding failed
+                            $("#config_err_alert").removeClass("hide").html(json.error);
+                            return true;
+                        }
+                    
+                        // adding succeded
+                        $("#addInstanceConfiguration").modal('hide');
+                        loadConfigurations()
+                    });
+                });
+            }
+            
+            function disable_hook(id) {
+                $.get('/disable_hook?id=' + id, function(response) {
+                    var json = JSON.parse(response)
+                    if (typeof(json.error) != 'undefined') {
+                        // disabling hook failed
+                        return true;
+                    }
+                
+                    // disabling succeded
+                    loadHooks()
+                });
+            }
+            
+            function enable_hook(id) {
+                $.get('/enable_hook?id=' + id, function(response) {
+                    var json = JSON.parse(response)
+                    if (typeof(json.error) != 'undefined') {
+                        // enabling hook failed
+                        return true;
+                    }
+                
+                    // enabling succeded
+                    loadHooks()
+                });
+            }
+            
+            function delete_hook(id) {
+                $.get('/delete_hook?id=' + id, function(response) {
+                    var json = JSON.parse(response)
+                    if (typeof(json.error) != 'undefined') {
+                        // deleting hook failed
+                        return true;
+                    }
+                
+                    // deleting succeded
+                    loadHooks()
+                });
+            }
+            
+            function delete_configuration(id) {
+                $.get('/delete_configuration?id=' + id, function(response) {
+                    var json = JSON.parse(response)
+                    if (typeof(json.error) != 'undefined') {
+                        // deleting configuration failed
+                        return true;
+                    }
+                
+                    // deleting succeded
+                    loadConfigurations()
+                });
+            }
+            
+            function update_configuration(id) {
+                $.get('/get_instance_configurations?id=' + id, function(response) {
+                    var json = JSON.parse(response)
+                    
+                    if (typeof(json.error) != 'undefined') {
+                        // getting configuration failed
+                        return true;
+                    }
+                    
+                    config = json.configs[0]
+                
+                    $('#new-config-id').val(config.id)
+                    $('#new-config-name').val(config.name)
+                    $('#new-config-ami').val(config.ami)
+                    $('#new-config-key').val(config.keyname)
+                    $('#new-config-iam').val(config.iam_profile_name)
+                    $('#new-config-ebs-size').val(config.block_ebs_size)
+                    $('#new-config-userdata').val(config.user_data)
+                    $('#new-config-type').val(config.instance_type)
+                    $('#new-config-spot-bid').val(config.spot_price)
+                    
+                    $('#new-config-default').prop("checked", config.default_configuration)
+                    
+                    if (config.block_ebs_type == "gp2") {
+                        $('#new-config-ebs-gp2').prop("checked", true)
+                        $('#new-config-ebs-std').prop("checked", false)
+                    } else if (config.block_ebs_type == "std") {
+                        $('#new-config-ebs-gp2').prop("checked", false)
+                        $('#new-config-ebs-std').prop("checked", true)
+                    }
+                    
+                    if (config.spot_instance == true) {
+                        $('#new-config-spot').prop("checked", true)
+                    } else {
+                        $('#new-config-spot').prop("checked", false)
+                    }
+                    
+                    $('.remove-this').click()
+                    
+                    $.each(config.subnet_id, function(i, subnet) {
+                        add_subnet_handler()
+                        $(".subnet").last().find("input").val(subnet)
+                    })
+                    
+                    $.each(config.security_groups, function(i, sg) {
+                        add_sg_handler()
+                        $(".sg").last().find("input").val(sg)
+                    })
+                    
+                    $.each(config.tags, function(i, tag) {
+                        add_tag_handler()
+                        $(".tag-key").last().val(tag[0])
+                        $(".tag-val").last().val(tag[1])
+                    })
+                    
+                    addInstanceConfiguration()
+                })
+            }
+            
+            function loadHooks() {
+                $.get('/get_hooks', function(response) {
+                    var json = JSON.parse(response)
+                    
+                    if (typeof(json.error) != 'undefined') {
+                        // getting hooks failed
+                        return true;
+                    }
+                
+                    hooks = ""
+                    
+                    $.each(json.hooks, function(i, hook) {
+                        hooks += '<div class="panel panel-default hook_panel" style="height: auto; width: 100%; margin-right: 10px;">' +
+                                    '<div style="width: 100%; overflow: hidden; padding: 10px;">' +
+                                        '<div class="col-xs-10">' +
+                                            '<span class="col-xs-12" style="margin-bottom: 10px;">' +
+                                                ((hook.state == "inactive") ? "<strong>[Inactive] </strong>" : "") +
+                                                '<strong>' + hook.name + '</strong> - ' +
+                                                '<span class="small">/hook?api_token=' + hook.api_token + '</span>' +
+                                            '</span>' +
+                                            '<span class="col-xs-12" style="margin-left:20px">' +
+                                                '<strong>Last Used: </strong><span class="small">' + hook.last_used_str + '</span>' +
+                                                '</br>' +
+                                                '<strong>Action: </strong><span class="small">' + hook.action + '</span>' +
+                                                '</br>' +
+                                                '<strong style="vertical-align:top;">Targets: </strong>' +
+                                                '<div class="small" style="display: inline-block">' +
+                                                    hook.targets.join("</br>") +
+                                                '</div>' +
+                                            '</span>' +
+                                        '</div>' +
+                                        '<div class="col-xs-2">' +
+                                            ((hook.state == "active") ?
+                                                '<button class="btn btn-default col-xs-6 pull-right" onclick="disable_hook(\'' + hook.id + '\')">Disable</button>'
+                                            :
+                                                '<button class="btn btn-default col-xs-6 pull-right" onclick="enable_hook(\'' + hook.id + '\')">Enable</button>') +
+                                            '</br>' +
+                                            '</br>' +
+                                            '<button class="btn btn-danger col-xs-6 pull-right" onclick="delete_hook(\'' + hook.id + '\')">Delete</button>' +
+                                        '</div>' +
+                                    '</div>' +
+                                '</div>'
+                    });
+                    
+                    
+                    $("#hook-container").html(hooks)
+                });
+            }
+            
+            function loadConfigurations() {
+                $.get('/get_instance_configurations', function(response) {
+                    var json = JSON.parse(response)
+                    
+                    if (typeof(json.error) != 'undefined') {
+                        // getting configurations failed
+                        return true;
+                    }
+                
+                    configs = ""
+                    
+                    $.each(json.configs, function(i, config) {
+                        configs += '<div class="panel panel-default configuration_panel" style="height: auto; width: 100%; margin-right: 10px;">' +
+                                      '<div style="width: 100%; overflow: hidden; padding: 10px;">' +
+                                          '<div class="col-xs-10">' +
+                                              '<span class="col-xs-12" style="margin-bottom: 10px;">' +
+                                                  ((config.default_configuration == true) ? "<strong>[Default] </strong>" : "") +
+                                                  '<strong>' + config.name + '</strong>' +
+                                              '</span>' +
+                                              '<span class="col-xs-12" style="margin-left:20px">' +
+                                                  '<strong>AMI: </strong>' + config.ami + '</br>' +
+                                                  '<strong>Private Key: </strong>' + config.keyname + '</br>' +
+                                                  '<strong>IAM profile: </strong>' + config.iam_profile_name + '</br>' +
+                                              '</span>' +
+                                          '</div>' +
+                                          '<div class="col-xs-2">' +
+                                              '<button class="btn btn-default col-xs-6 pull-right" onclick="update_configuration(\'' + config.id + '\')">Update</button>' +
+                                              '</br>' +
+                                              '</br>' +
+                                              '<button class="btn btn-danger col-xs-6 pull-right" onclick="delete_configuration(\'' + config.id + '\')">Delete</button>' +
+                                          '</div>' +
+                                      '</div>' +
+                                  '</div>'
+                    });
+                    
+                    
+                    $("#configuration-container").html(configs)
+                });
+            }
         
             $(document).ready(function(e) {
                 load_users()
+                update_project()
                 
                 $(document).on("click", "#search-users", function (e) {
                     addUserModal();
                 });
             
+                
+                $(document).on("click", "#add-incoming-hook", function (e) {
+                    addIncomingHook();
+                });
+                
+                $(document).on("click", "#add-instance-configuration", function (e) {
+                    resetInstanceConfigModal()
+                    addInstanceConfiguration();
+                });
+            
+                $("#add-target").off('click').on('click', function(e) {
+                    e.preventDefault();
+                    add_target_handler(this.id)
+                });
+            
+                $("#add-subnet").off('click').on('click', function(e) {
+                    e.preventDefault();
+                    add_subnet_handler(this.id)
+                });
+            
+                $("#add-tag").off('click').on('click', function(e) {
+                    e.preventDefault();
+                    add_tag_handler(this.id)
+                });
+            
+                $("#add-sg").off('click').on('click', function(e) {
+                    e.preventDefault();
+                    add_sg_handler(this.id)
+                });
+                
                 $(document).on('click', '#admin-panel-sidebar-links li', function (e) {
-                                        
                     // clear update statuses
                     $(".fa-spinner, .fa-spin, .fa-check-circle-o, .fa-times-circle-o").removeClass("fa-spinner fa-spin fa-check-circle-o fa-times-circle-o");
                     $(".update-status").html("").addClass("hide")
@@ -344,6 +853,9 @@
                         });
                     });
                 });
+                
+                loadHooks()
+                loadConfigurations()
             });
         </script>
     </head>
@@ -412,11 +924,20 @@
                     
                     <div id="admin-panel-body-webhooks" class="hide">
                         <h2>Webhooks</h2>
-                        
+                        <p>Incoming webhooks allow you to manage workflow with outside events. They allow outside applications to start, stop, or see the status of the tasks the webhook targets. Uses for this include CI/CD, Github or S3 events, and monitoring. When you create an incoming webhook a new public endpoint will be made available. You can add this endpoint to outgoing webhooks of outside applications or services.<p>
+                        <button id="add-incoming-hook" class="btn btn-primary pull-left">Add Incoming Webhook</button>
+                        </br>
+                        </br>
+                        <div id="hook-container"></div>
                     </div>
                     
                     <div id="admin-panel-body-instance-configurations" class="hide">
-                        instance configs
+                        <h2>Instance Configurations</h2>
+                        <p>An instance configuration tells Tangerine what kind of host should be provisioned when using the built-in host scaling manager. Each tasks can specify the instance configurations that best suits it's processing needs.<p>
+                        <button id="add-instance-configuration" class="btn btn-primary pull-left">Add Instance Configuration</button>
+                        </br>
+                        </br>
+                        <div id="configuration-container"></div>
                     </div>
                     
                     <div id="admin-panel-body-amazon" class="hide">
@@ -708,6 +1229,208 @@
                     <div class="modal-footer">
                         <button type="button" class="btn btn-default pull-left" data-dismiss="modal">Close</button>
                         <button id="add-user-confirm" type="button" class="btn btn-success pull-right">Add</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="modal fade" id="addIncomingHook" role="dialog">
+            <div class="modal-dialog modal-md">
+                <div id="add-user-modal-content" class="modal-content">
+                    <div class="modal-header">
+                        <button type="button" class="close" data-dismiss="modal">&times;</button>
+                        <h4 id="modal-title-user-name" class="modal-title">Add Incoming Webhook</h4>
+                    </div>
+
+                    <div class="modal-body" style="height: 40%; overflow: auto; position:static;">
+                        <div id="hook_err_alert" class="alert alert-danger fade in hide" role="alert">
+                            <div id="err_msg"></div>
+                        </div>
+                        <form class="form-horizontal" id="add_job_form" role="form" autocomplete="off">
+                            <div class="form-group">
+                                <label class="control-label col-sm-2">
+                                    Name <span class="glyphicon glyphicon-question-sign" style="color: lightgrey" data-toggle="tooltip" data-placement="top" title="A name to remind users of the purpose of this hook"></span>
+                                </label>
+                                <div class="col-sm-10"><input class="form-control" id="new-hook-name" name="name"></div>
+                            </div>
+                            <div class="form-group">
+                                <label class="control-label col-sm-2">Action <span class="glyphicon glyphicon-question-sign" style="color: lightgrey" data-toggle="tooltip" data-placement="top" title="The action this webhook executes. v0.2.2: Misfire is the only supported action."></span></label>
+                                <div class="col-sm-10">
+                                    <select class="form-control radio-inline" id="new-hook-action" name="action" style="display: inline-block;" placeholder="misfire">
+                                        <option value="misfire">misfire</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                    <label class="control-label col-sm-2">
+                                        Target
+                                        <span class="glyphicon glyphicon-question-sign" style="color: lightgrey" data-toggle="tooltip" data-placement="top" title="Start typing to find targets. The above action will occur on every target. You can target jobs, tasks, or tags. *One target per input box*"></span>
+                                        <button id="add-target" class="center-block img-circle btn btn-primary btn-add-glyphicon add-more">
+                                            <span class="glyphicon glyphicon-plus"></span>
+                                        </button>
+                                    </label>
+                                <div id="targets">
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-default pull-left" data-dismiss="modal">Close</button>
+                        <button id="add-incoming-hook-confirm" type="button" class="btn btn-success pull-right">Add Webhook</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="modal fade" id="addInstanceConfiguration" role="dialog">
+            <div class="modal-dialog modal-lg" style="width: 90%">
+                <div id="add-user-modal-content" class="modal-content">
+                    <div class="modal-header">
+                        <button type="button" class="close" data-dismiss="modal">&times;</button>
+                        <h4 id="modal-title-user-name" class="modal-title">Add Instance Configuration</h4>
+                    </div>
+
+                    <div class="modal-body" style="height: 70%; overflow: auto; position:static;">
+                        <div id="config_err_alert" class="alert alert-danger fade in hide" role="alert">
+                            <div id="err_msg"></div>
+                        </div>
+                        <form class="form-horizontal" id="add_config_form" role="form" autocomplete="off">
+                            <div class="col-xs-6">
+                                <input class="form-control hidden" id="new-config-id" name="id">
+                                
+                                <div class="form-group">
+                                    <span class="col-sm-3">
+                                        <span class="glyphicon glyphicon-question-sign pull-right" style="color: lightgrey" data-toggle="tooltip" data-placement="top" title="A unique name for this configuration."></span>
+                                        <label class="control-label pull-right">Name</label>
+                                    </span>
+                                    <div class="col-sm-6"><input class="form-control" id="new-config-name" name="name"></div>
+                                    <div class="col-sm-3" style="display: inline-block;">
+                                        <input type="checkbox" id="new-config-default" value="">
+                                        <label for="new-config-default">Default?</label>
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <span class="col-sm-3">
+                                        <span class="glyphicon glyphicon-question-sign pull-right" style="color: lightgrey" data-toggle="tooltip" data-placement="top" title="The AMI to use when deploying an instance using this configuration."></span>
+                                        <label class="control-label pull-right">AMI</label>
+                                    </span>
+                                    <div class="col-sm-9"><input class="form-control" id="new-config-ami" name="ami"></div>
+                                </div>
+                                <div class="form-group">
+                                    <span class="col-sm-3">
+                                        <span class="glyphicon glyphicon-question-sign pull-right" style="color: lightgrey" data-toggle="tooltip" data-placement="top" title="The private ssh key to assign to this instance."></span>
+                                        <label class="control-label pull-right">Private Key</label>
+                                    </span>
+                                    <div class="col-sm-9"><input class="form-control" id="new-config-key" name="key"></div>
+                                </div>
+                                <div class="form-group">
+                                    <span class="col-sm-3">
+                                        <span class="glyphicon glyphicon-question-sign pull-right" style="color: lightgrey" data-toggle="tooltip" data-placement="top" title="The iam profile to assign to this instance."></span>
+                                        <label class="control-label pull-right">IAM Profile</label>
+                                    </span>
+                                    <div class="col-sm-9"><input class="form-control" id="new-config-iam" name="iam"></div>
+                                </div>
+                                <div class="form-group">
+                                    <span class="col-sm-3">
+                                        <span class="glyphicon glyphicon-question-sign pull-right" style="color: lightgrey" data-toggle="tooltip" data-placement="top" title="The desired size and type of the EBS volume."></span>
+                                        <label class="control-label pull-right">EBS (GB)</label>
+                                    </span>
+                                    <div class="col-sm-3"><input class="form-control" id="new-config-ebs-size" name="ebs-size"></div>
+                                    <div class="col-sm-6">
+                                        <label class="radio-inline"><input type="radio" id="new-config-ebs-gp2" name="ebstype" checked>GP2</label>
+                                        <label class="radio-inline"><input type="radio" id="new-config-ebs-std" name="ebstype">Standard</label>
+                                    </div>
+                                </div>
+                                 <div class="form-group">
+                                    <span class="col-sm-3">
+                                        <span class="glyphicon glyphicon-question-sign pull-right" style="color: lightgrey" data-toggle="tooltip" data-placement="top" title="The user data to apply to the instances."></span>
+                                        <label class="control-label pull-right">User Data</label>
+                                    </span>
+                                    <span class="col-sm-9">
+                                        <textarea class="form-control" rows="5" id="new-config-userdata" style="resize: none;"></textarea>
+                                    </span>
+                                </div>
+                            </div>
+      
+                            <div class="col-xs-6">
+                                <div class="form-group">
+                                    <span class="col-sm-3">
+                                        <span class="glyphicon glyphicon-question-sign pull-right" style="color: lightgrey" data-toggle="tooltip" data-placement="top" title="The type of instance to start."></span>
+                                        <label class="control-label pull-right">Instance Type</label>
+                                    </span>
+                                    <div class="col-sm-9">
+                                        <select class="form-control radio-inline" id="new-config-type" name="action" style="display: inline-block;" placeholder="t2.micro">
+                                            <option value="t2.micro">t2.micro</option>
+                                            <option value="t3.medium">t3.medium</option>
+                                            <option value="r3.xlarge">r3.xlarge</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <span class="col-sm-6 col-xs-offset-3">
+                                        <div style="display: inline-block;">
+                                            <input type="checkbox" id="new-config-spot" value="">
+                                            <label for="new-config-spot">Spot Instance?</label>
+                                        </div>
+                                        <div style="display: inline-block;">
+                                            <input class="form-control" id="new-config-spot-bid" name="bid" style="width: 70px;" placeholder="0.05">
+                                        </div>
+                                        <span class="glyphicon glyphicon-question-sign" style="color: lightgrey" data-toggle="tooltip" data-placement="top" title="Should this instance be a spot instance and the max bid for the spot instance."></span>
+                                    </span>
+                                </div>
+                                <div class="form-group">
+                                    <span class="col-sm-3">
+                                        <label class="center-block pull-right">
+                                            <p>Subnets</p>
+                                            <span class="pull-right" style="margin-top: -10px">
+                                                <button id="add-subnet" class="img-circle btn btn-primary btn-add-glyphicon add-more" style="">
+                                                    <span class="glyphicon glyphicon-plus"></span>
+                                                </button>
+                                                <span class="glyphicon glyphicon-question-sign" style="color: lightgrey" data-toggle="tooltip" data-placement="top" title="The id of the subnets to start hosts in. *One subnet per input box*"></span>
+                                            </span>
+                                        </label>
+                                    </span>
+                                    <div id="subnets" class="col-sm-9">
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <span class="col-sm-3">
+                                        <label class="center-block pull-right">
+                                            <p>Security Groups</p>
+                                            <span class="pull-right" style="margin-top: -10px">
+                                                <button id="add-sg" class="img-circle btn btn-primary btn-add-glyphicon add-more" style="">
+                                                    <span class="glyphicon glyphicon-plus"></span>
+                                                </button>
+                                                <span class="glyphicon glyphicon-question-sign" style="color: lightgrey" data-toggle="tooltip" data-placement="top" title="The id of the security groups to add to the hosts. *One sg per input box*"></span>
+                                            </span>
+                                        </label>
+                                    </span>
+                                    <div id="sgs" class="col-sm-9">
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <span class="col-sm-3">
+                                        <label class="center-block pull-right">
+                                            <p>Tags</p>
+                                            <span class="pull-right" style="margin-top: -10px">
+                                                <button id="add-tag" class="img-circle btn btn-primary btn-add-glyphicon add-more" style="">
+                                                    <span class="glyphicon glyphicon-plus"></span>
+                                                </button>
+                                                <span class="glyphicon glyphicon-question-sign" style="color: lightgrey" data-toggle="tooltip" data-placement="top" title="A list of tags to add to this host. *One tag per input box*"></span>
+                                            </span>
+                                        </label>
+                                    </span>
+                                    <div id="tags" class="col-sm-9">
+                                    </div>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-default pull-left" data-dismiss="modal">Close</button>
+                        <button id="add-incoming-config-confirm" type="button" class="btn btn-success pull-right">Add Configuration</button>
                     </div>
                 </div>
             </div>

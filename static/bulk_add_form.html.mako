@@ -156,7 +156,7 @@
                     console.log('{"error": "All tasks need a name"}')
                     return JSON.parse('{"error": "All tasks need a name"}')
                 }
-                if (typeof(config.tasks[i].image) == 'undefined') {
+                if (typeof(config.tasks[i].image) == 'undefined' && typeof(config.tasks[i].parent_job) == 'undefined') {
                     console.log('{"error": "All tasks without a parent need an image". Check the task `' + config.tasks[i].name + '`"}')
                     return JSON.parse('{"error": "All tasks without a parent need an image. Check the task `' + config.tasks[i].name + '`"}')
                 }

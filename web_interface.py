@@ -155,7 +155,8 @@ class Statuspage(object):
                                     userimageurl = cherrypy.session['userimageurl'],
                                     usertype = cherrypy.session['usertype'],
                                     settings = settings,
-                                    users = API.get_users()
+                                    users = API.get_users(),
+                                    hooks = API.get_hooks()
                                   )
             else:
                 return tmpl.render(
@@ -163,7 +164,8 @@ class Statuspage(object):
                                     userimageurl = cherrypy.session.get("userimageurl", "dev"),
                                     usertype = cherrypy.session.get("usertype", "admin"),
                                     settings = settings,
-                                    users = API.get_users()
+                                    users = API.get_users(),
+                                    hooks = API.get_hooks()
                                   )
         else:
             return json.dumps({"error": "User not authorized for this request"})
@@ -260,8 +262,8 @@ class Statuspage(object):
                                 environment=environment, datavolumes=datavolumes, port=port, description=description)
 
     @cherrypy.expose
-    def get_task(self, id=None):
-        return API.get_task(id)
+    def get_task(self, id=None, name=None):
+        return API.get_task(id, name)
       
     @cherrypy.expose
     def get_tasks(self):
@@ -296,7 +298,7 @@ class Statuspage(object):
       
     @cherrypy.expose
     def queue_task(self, id, username):
-        return API.queue_task(id, username)
+        return API.queue_task(id=id, username=username)
       
     @cherrypy.expose
     def infrastructure(self):
@@ -389,7 +391,37 @@ class Statuspage(object):
     @cherrypy.expose
     def hook(self, api_token):
         return API.hook(api_token)
+      
+    @cherrypy.expose
+    def get_hooks(self, id=None, action=None, target=None, state=None, api_token=None):
+        return API.get_hooks(id, action, target, state, api_token)
 
+    @cherrypy.expose
+    def delete_hook(self, id):
+        if cherrypy.session.get("usertype", "user") == "admin":
+            return API.delete_hook(id)
+        else:
+            return json.dumps({"error": "User not authorized for this request"})
+
+    @cherrypy.expose
+    def disable_hook(self, id):
+        if cherrypy.session.get("usertype", "user") == "admin":
+            return API.disable_hook(id)
+        else:
+            return json.dumps({"error": "User not authorized for this request"})
+
+    @cherrypy.expose
+    def enable_hook(self, id):
+        if cherrypy.session.get("usertype", "user") == "admin":
+            return API.enable_hook(id)
+        else:
+            return json.dumps({"error": "User not authorized for this request"})
+      
+    @cherrypy.expose
+    def add_incoming_hook(self, name=None, action=None, target=None):
+        if cherrypy.session.get("usertype", "user") == "admin":
+            return API.add_incoming_hook(name, action, target)
+        
     @cherrypy.expose
     def set_setting(self, setting=None, value=None):
         # Check if the user is an admin
@@ -421,6 +453,25 @@ class Statuspage(object):
             return API.add_user(username, userid, usertype)
         else:
             return json.dumps({"error": "User not authorized for this request"})
+      
+    @cherrypy.expose
+    def add_instance_configuration(self, name=None, ami=None, key=None, iam=None, ebssize=None,
+                                   ebstype=None, userdata=None, instance_type=None, spot=None, bid=None,
+                                   subnet=None, sg=None, tag=None, id=None, default=False):
+        if cherrypy.session.get("usertype", "user") == "admin":
+            return API.add_instance_configuration(name, ami, key, iam, ebssize,
+                                                  ebstype, userdata, instance_type, spot, bid,
+                                                  subnet, sg, tag, id, default)
+        else:
+            return json.dumps({"error": "User not authorized for this request"})
+    
+    @cherrypy.expose
+    def get_instance_configurations(self, id=None, name=None):
+        return API.get_instance_configurations(id, name)
+      
+    @cherrypy.expose
+    def delete_configuration(self, id):
+        return API.delete_configuration(id)
       
     @cherrypy.expose
     def ping(self):

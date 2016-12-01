@@ -236,10 +236,10 @@ def add_agent():
     else:
         postgres.add_agent(
                           agent_id = agent_id,
-                          host_ip = urlopen('http://169.254.169.254/latest/meta-data/local-ipv4').read(),
+                          host_ip = urlopen('http://169.254.169.254/latest/meta-data/local-ipv4').read().decode('utf-8'),
                           agent_port = 443,
-                          instance_id = urlopen('http://169.254.169.254/latest/meta-data/instance-id').read(),
-                          instance_type = urlopen('http://169.254.169.254/latest/meta-data/instance-type').read(),
+                          instance_id = urlopen('http://169.254.169.254/latest/meta-data/instance-id').read().decode('utf-8'),
+                          instance_type = urlopen('http://169.254.169.254/latest/meta-data/instance-type').read().decode('utf-8'),
                           available_memory = dict((i.split()[0].rstrip(':'),int(i.split()[1])) for i in open('/proc/meminfo').readlines())['MemTotal'],
                           agent_creation_time = int(time()),
                           agent_key = agent_key

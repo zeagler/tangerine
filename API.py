@@ -14,10 +14,12 @@ from json import dumps
 from docker_commands import get_log
 
 import agent
+from amazon_functions import Amazon
 import hook
 import job
 import settings
 import user
+import instance_configuration
 
 class API(object):
     def __init__(self, postgres):
@@ -178,29 +180,54 @@ class API(object):
             
         return dumps({"error": "Requested task does not exist"})
               
-    def queue_task(self, id, username):
+    def queue_task(self, id=None, name=None, username=None):
         """
-        Stop a task.
+        Start a task.
         
         Args:
-            id: The id of the task to disable
+            id: The id of the task to start
             
         Return:
             if success: A json confirmation
             if failed: a proper error code
         """
-        if not id:
+        if not id and not name:
             return dumps({"error": "Task ID is not defined"})
       
-        task = self.postgres.get_task(id)
+        task = self.postgres.get_task(id, name)
         
         if task:
             task.queue("misfire", username)
             return dumps({"success": "Task was queued"})
             
         return dumps({"error": "Requested task does not exist"})
+                    
+    def queue_tag(self, tag, username):
+        """
+        Start tasks with a tag.
+        
+        Args:
+            id: The tag of tasks to start
+            
+        Return:
+            if success: A json confirmation
+            if failed: a proper error code
+        """
+        if not tag:
+            return dumps({"error": "Tag is not defined"})
       
-    def get_task(self, id):
+        tasks = self.postgres.get_tasks_tag(tag)
+        
+        if tasks:
+            for task in tasks:
+                if task.parent_job == None:
+                    task.queue("misfire", username)
+            
+            return dumps({"success": "Tasks were queued"})
+            
+        return dumps({"error": "Requested task does not exist"})
+      
+    def get_task(self, id, name):
         """
         Get a specific task's information
         
@@ -211,10 +238,10 @@ class API(object):
             if success: A json response of the task
             if failed: a proper error code
         """
-        if not id:
+        if not id and not name:
             return dumps({"error": "Task ID is not defined"})
       
-        task = self.postgres.get_task(id)
+        task = self.postgres.get_task(id, name)
         return dumps(task.__dict__)
         
     def get_task_object(self, id):
@@ -368,7 +395,21 @@ class API(object):
                               )
       
     # Tangerine Services
-    
+    def add_incoming_hook(self, name=None, action=None, targets=None):
+        return dumps(hook.create_hook(name, action, targets))
+      
+    def get_hooks(self, id=None, action=None, target=None, state=None, api_token=None):
+        return dumps({"hooks": [h.__dict__ for h in hook.get_hooks(id, action, target, state, api_token)]})
+
+    def delete_hook(self, id):
+        return dumps(hook.delete_hook(id))
+
+    def disable_hook(self, id):
+        return dumps(hook.deactivate_hook(id))
+
+    def enable_hook(self, id):
+        return dumps(hook.activate_hook(id))
+      
     def hook(self, api_token):
         """Execute a webhook"""
         hooks = hook.get_hooks(api_token=api_token)
@@ -380,8 +421,14 @@ class API(object):
                 return dumps({"error": "Hook is not valid"})
             
             if h.action == "misfire":
+                h.set_last_used()
                 for target in h.targets:
-                    self.queue_task(target, "webhook-" + str(h.id))
+                    if target[0:5] == "task:":
+                        self.queue_task(name=target[5:], username="webhook-" + str(h.id))
+                    elif target[0:4] == "job:":
+                        self.queue_job(name=target[4:], username="webhook-" + str(h.id))
+                    elif target[0:4] == "tag:":
+                        self.queue_tag(target[4:], username="webhook-" + str(h.id))
                 
                 return dumps({"success": "Hook actions were executed"})
             
@@ -402,3 +449,21 @@ class API(object):
     def add_user(self, username, userid, usertype):
         return dumps(user.add_user(username, userid, usertype))
         
+    def get_instance_configurations(self, id=None, name=None):
+        return dumps({"configs": [c.__dict__ for c in instance_configuration.get_configuration(id, name)]})
+      
+    def add_instance_configuration(self, name=None, ami=None, key=None, iam=None, ebssize=None,
+                                   ebstype=None, userdata=None, instance_type=None, spot=None, bid=None,
+                                   subnet=None, sg=None, tag=None, id=None, default=False):
+        if id == None:
+            return dumps(instance_configuration.create(name, ami, key, iam, ebssize,
+                                                        ebstype, userdata, instance_type, spot, bid,
+                                                        subnet, sg, tag, default))
+        else:
+            return dumps(instance_configuration.update(name, ami, key, iam, ebssize,
+                                                       ebstype, userdata, instance_type, spot, bid,
+                                                       subnet, sg, tag, id, default))          
+          
+    def delete_configuration(self, id):
+        return dumps(instance_configuration.delete(id))
+    

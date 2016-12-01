@@ -45,7 +45,7 @@ class Postgres():
         cur.execute("select column_name from information_schema.columns where table_name='agents';")
         setattr(self, "agent_columns", cur.fetchall())
         
-        cur.execute("select column_name from information_schema.columns where table_name='host_configurations';")
+        cur.execute("select column_name from information_schema.columns where table_name='instance_configurations';")
         setattr(self, "host_configuration_columns", cur.fetchall())
         
         cur.execute("select column_name from information_schema.columns where table_name='hooks';")
@@ -71,12 +71,12 @@ class Postgres():
     def get_task(self, id=None, name=None):
         """Get the information of a task"""
         query = "SELECT * FROM tangerine WHERE "
-        if id: query += "id='"+str(id)+"';"
-        elif name: query += "name='"+name+"';"
+        if id: query += "id='"+str(id)+"'"
+        elif name: query += "name='"+name+"' AND parent_job IS NULL"
         else: return None
         
         cur = self.conn.cursor()
-        cur.execute(query)
+        cur.execute(query + ";")
         self.conn.commit()
         task = cur.fetchone()
         
@@ -103,6 +103,25 @@ class Postgres():
             cur.execute("SELECT * FROM tangerine WHERE "+column+"='NULL';")
         else:
             cur.execute("SELECT * FROM tangerine WHERE "+column+"='"+str(value)+"';")
+        
+        self.conn.commit()
+        return [Task(self.columns, task) for task in cur.fetchall()]
+      
+    def get_tasks_tag(self, tag=None):
+        """
+        Get all tasks who has a specified tag
+        
+        Args:
+            tag: The tag to match
+        
+        Returns:
+            A list of Task objects, one for each task that has the tag
+        """
+        cur = self.conn.cursor()
+        if tag == None:
+            return None
+        else:
+            cur.execute("SELECT * FROM tangerine WHERE '" + str(tag) + "'=any(tags);")
         
         self.conn.commit()
         return [Task(self.columns, task) for task in cur.fetchall()]

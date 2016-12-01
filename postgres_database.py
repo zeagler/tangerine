@@ -58,10 +58,15 @@ def check_tables(postgres_connection):
     if not cur.fetchone()[0]:
         create_hooks_table(postgres_connection)
 
-    # Check if the webhook table exists, create it if it does not
+    # Check if the settings table exists, create it if it does not
     cur.execute("select exists(select * from information_schema.tables where table_name='settings')")
     if not cur.fetchone()[0]:
         create_settings_table(postgres_connection)
+
+    # Check if the instance configuration table exists, create it if it does not
+    cur.execute("select exists(select * from information_schema.tables where table_name='instance_configurations')")
+    if not cur.fetchone()[0]:
+        create_host_table(postgres_connection)
 
     postgres_connection.commit()
 
@@ -265,9 +270,30 @@ def create_settings_table(postgres_connection):
     postgres_connection.commit()
 
 def create_host_table(postgres_connection):
-    #TODO
-    print("WIP")
-
+    """Create the table to store instance configurations"""
+    cur = postgres_connection.cursor()
+    cur.execute("""
+    CREATE TABLE instance_configurations (
+        id                       serial,
+        name                     varchar       NOT NULL UNIQUE,
+        AMI                      varchar       NOT NULL,
+        keyname                  varchar       NOT NULL,
+        security_groups          varchar[],
+        instance_type            varchar       NOT NULL,
+        block_ebs_size           integer       NOT NULL,
+        block_ebs_type           varchar       NOT NULL,
+        iam_profile_name         varchar,
+        user_data                varchar,
+        user_data_base64         varchar,
+        subnet_id                varchar[]     NOT NULL,
+        spot_instance            boolean       NOT NULL DEFAULT false,
+        spot_price               varchar       NOT NULL,
+        tags                     varchar[][2],
+        default_configuration    boolean       NOT NULL DEFAULT false
+    );""")
+    postgres_connection.commit()
+    
+    
 def create_agent_table(postgres_connection):
     """Create the table to store agent history"""
     cur = postgres_connection.cursor()
@@ -299,6 +325,7 @@ def create_hooks_table(postgres_connection):
     cur.execute("""
     CREATE TABLE hooks (
         id                       serial        PRIMARY KEY,
+        name                     varchar       NOT NULL,
         action                   varchar       NOT NULL,
         targets                  varchar[]     NOT NULL,
         state                    varchar       NOT NULL DEFAULT 'active',

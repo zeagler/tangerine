@@ -6,13 +6,14 @@ from time import mktime, strftime, time
 from json import dumps
 from uuid import uuid4
 from hashlib import sha1
+from datetime import datetime
 import hmac
 
 from postgres_functions import Postgres
 global postgres
 postgres = Postgres()
 
-def get_hooks(id=None, api_token=None, action=None, target=None):
+def get_hooks(id=None, api_token=None, action=None, state=None, target=None):
     """
     Retrieves a list of hooks that match the request
     
@@ -32,53 +33,68 @@ def get_hooks(id=None, api_token=None, action=None, target=None):
         query += " WHERE action='"+str(action)+"'"
     elif not target == None:
         query += " WHERE target='"+str(target)+"'"
+    elif not state == None:
+        query += " WHERE state='"+str(state)+"'"
 
-    results = postgres.execute(query + ";")
+    results = postgres.execute(query + " ORDER BY id DESC;")
     
     if results:
         return [Hook(values = hook) for hook in results.fetchall()];
     else:
         return None
 
+def delete_hook(id):
+    """Delete a hook"""
+    query = "DELETE FROM hooks WHERE id=" + str(id)
+    results = postgres.execute(query + ";")
+
+    if len(get_hooks(id=id)) == 0:
+        return {"success": "Hook was deleted"}
+    else:
+        return {"error": "Hook was not deleted"}
+
 def deactivate_hook(id):
     """Deactivate a hook"""
     hook = get_hooks(id)[0]
     
     if hook:
-        hook.deactivate()
-        return True
+        return hook.deactivate()
     else:
-        return False
+        return None
 
 def activate_hook(id):
     """Activate a hook"""
     hook = get_hooks(id)[0]
     
     if hook:
-        hook.activate()
-        return True
+        return hook.activate()
     else:
-        return False
+        return None
 
-def create_hook(action, targets):
+def create_hook(name, action, targets):
     """
     Create a new hook.
     """
+    if name == None:
+        return {"error": "Name can not be empty"}
+    
     if not action in ["misfire"]:
-        return dumps({"error": "The requested action is not supported by webhooks yet"})
+        return {"error": "The requested action is not supported by webhooks yet"}
 
-    if type(targets) is not list:
-        pass
-        # make it a list
+    if type(targets) is list:
+        tar = ", ".join(targets)
+    else:
+        tar = targets
 
     token = generate_token()
     columns = {}
     
+    columns["name"] = name
     columns["action"] = action
-    columns["targets"] = targets
+    columns["targets"] = "{"+tar+"}"
     columns["state"] = "active"
     columns["api_token"] = token
-    columns["created"] = time()
+    columns["created"] = int(time())
 
     query = "INSERT INTO hooks (" + ", ".join(columns.keys())  + ") VALUES (" + ", ".join("'" + str(val) + "'" for val in columns.values()) + ")"
 
@@ -89,16 +105,16 @@ def create_hook(action, targets):
         hook = get_hooks(api_token=token)[0]
         
         if hook:
-            return dumps(hook.__dict__)
-
-    return dumps({"error": "Could not add hook"})
+            return hook.__dict__
+          
+    return {"error": "Could not add hook"}
 
 def generate_token():
-    token = hmac.new(str(uuid4), digestmod=sha1).hexdigest()
+    token = hmac.new(uuid4().bytes, digestmod=sha1).hexdigest()
     
     # ensure a unique key is generated
-    while not get_hooks(api_token=token) == None:
-        token = hmac.new(str(uuid4), digestmod=sha1).hexdigest()
+    while len(get_hooks(api_token=token)) > 0:
+        token = hmac.new(uuid4().bytes, digestmod=sha1).hexdigest()
     
     return token
 
@@ -134,10 +150,14 @@ class Hook(object):
             # This loop runs for lists
             for i in range(len(values)):
                 setattr(self, columns[i], values[i])
+                
+        if self.last_used: setattr(self, "last_used_str", datetime.fromtimestamp(self.last_used).strftime('%I:%M:%S%p %B %d, %Y'))
+        else: setattr(self, "last_used_str", "")
 
-    def __repr__(self):
-        """Return a string representation of all the attributes of this job"""
-        return ', '.join("%s: %s" % item for item in vars(self).items())    
+    def set_last_used(self):
+        global postgres
+        query = "UPDATE hooks SET last_used=" + str(int(time())) + " WHERE id=" + str(self.id) + ";"
+        postgres.execute(query)
 
     def deactivate(self):
         """
@@ -148,9 +168,9 @@ class Hook(object):
         results = postgres.execute(query)
         
         if results:
-            return json.dumps({"success": "Hook was deactivated"})
+            return {"success": "Hook was deactivated"}
         else:
-            return json.dumps({"error": "Could not deactivate hook"})
+            return {"error": "Could not deactivate hook"}
 
     def activate(self):
         """
@@ -161,6 +181,6 @@ class Hook(object):
         results = postgres.execute(query)
         
         if results:
-            return json.dumps({"success": "Hook was reactivated"})
+            return {"success": "Hook was reactivated"}
         else:
-            return json.dumps({"error": "Could not reactivate hook"})
+            return {"error": "Could not reactivate hook"}

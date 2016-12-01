@@ -12,6 +12,7 @@ from atexit import register
 from time import sleep
 from urllib.request import urlopen
 import urllib.error
+import instance_configuration
 
 from agent import Agent
 from amazon_functions import Amazon
@@ -36,9 +37,15 @@ def check_agents():
         try:
             agents = []
             agents += [Agent(agent) for agent in postgres.get_agents(state="active")]
+            agents += [Agent(agent) for agent in postgres.get_agents(state="removing")]
             agents += [Agent(agent) for agent in postgres.get_agents(state="bad_agent")]
             
             for agent in agents:
+                if agent.state == "removing":
+                    agent.update_state("inactive")
+                    agent.update_agent_termination_time()
+                    continue
+              
                 try:
                     #url = 'https://'+agent.host_ip+':'+agent.agent_port+'/ping?agent_key=' + agent.agent_key
                     url = 'https://'+agent.host_ip+'/ping?agent_key=' + agent.agent_key
@@ -77,60 +84,40 @@ def check_agents():
         except Exception as e:
             print('{!r}; error checking agents'.format(e))
 
-def check_ec2_fleet():
-    """
-    Scale the Spot Request based on the size of the queue
-    
-    This keeps the scale of the Spot Fleet at 1/3 the sum of the running
-      and ready queue. The hosts are not terminated when the Spot Fleet is
-      scaled down. Instead this function will check if the number of active hosts
-      in Rancher is greater than the target capacity of the Spot Fleet. This
-      function will then terminate an idle instance once per loop to bring the active
-      host count down to match the target capacity.
-    
-    TODO: Scale 1 at a time
-    TODO: Add variable scaling rules
-    TODO: Wait variable minutes before terminating
-    TODO: Scale up timeout
-    TODO: Base scale on throughput and history
-    """
+def check_ec2_capacity():
     loop_delay = 30 # seconds
     timeout_limit = 1800/loop_delay # 30 minutes
     scale_down_timeout = 0
+    terminate_instance = False
     
     while True:
         try:
             sleep(loop_delay)
             
             if amazon.enabled():
-                capacity = amazon.get_target_capacity()
-                if capacity == "disabled":
-                    continue
+                # capacity is counted based on EC2 tags
+                capacity = amazon.get_capacity()
 
                 agents = [Agent(agent) for agent in postgres.get_agents(state='active')]
                 agent_count = len(agents)
                 running_tasks = len(postgres.get_tasks("state", "running"))
                 ready_tasks = len(postgres.get_tasks("state", "ready"))
                 target = ready_tasks + running_tasks
-
-                # Spot fleet requests have a lower limit of 1
-                if (target == 0):
-                    target = 1
                 
                 # Don't go over the user defined limit
                 if (target > amazon.scale_limit()):
                     target = amazon.scale_limit()
 
                 if capacity < target:
-                    amazon.scale_spot_request(target)
-                    slack.send_message("Scaling spot fleet request up to " + str(target) + " hosts")
+                    amazon.create_instance(instance_configuration.get_default())
+                    slack.send_message("Scaling capacity up to " + str(target) + " hosts")
                     scale_down_timeout = 0
                     continue
                   
                 elif capacity > target:
                     if scale_down_timeout > timeout_limit:
-                        amazon.scale_spot_request(target)
-                        slack.send_message("Scaling spot fleet request down to " + str(target) + " hosts")
+                        terminate_instance = True
+                        slack.send_message("Scaling capacity down to " + str(target) + " hosts")
                         scale_down_timeout = 0
                         continue
                     else:
@@ -140,18 +127,21 @@ def check_ec2_fleet():
                     scale_down_timeout = 0
 
                 # Terminate an EC2 instance if the active amount is more than EC2 capacity
-                if agent_count > capacity:
-                    for agent in agents:
-                        if agent.run:
-                            continue
-                          
-                        amazon.terminate_instance(agent.instance_id)
-                        agent.update_state("removing")
-                        break # This only terminates 1 instance per function call
+                if agent_count > target:
+                    if terminate_instance == True:
+                        for agent in agents:
+                            if agent.run:
+                                continue
+                              
+                            amazon.terminate_instance(agent.instance_id)
+                            agent.update_state("removing")
+                            break # This only terminates 1 instance per function call
+                else:
+                    terminate_instance = False
                       
-                #TODO: Check if agent count is less than ec2 count
+                #TODO: Check if agent count is less than capacity
                 #      Restart the missing agents or get a new ec2 instance
-
+                
         except Exception as e:
             print('{!r}; error in EC2 scale thread'.format(e))
 
@@ -301,7 +291,7 @@ def central_server():
     threads = []
 
     threads.append(threading.Thread(target=start_web_interface, args=(postgres, )))
-    threads.append(threading.Thread(target=check_ec2_fleet))
+    threads.append(threading.Thread(target=check_ec2_capacity))
     threads.append(threading.Thread(target=check_agents))
     threads.append(threading.Thread(target=monitor_jobs))
     
