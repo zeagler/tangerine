@@ -1361,14 +1361,57 @@
                                     </span>
                                     <div class="col-sm-9">
                                         <select class="form-control radio-inline" id="new-config-type" name="action" style="display: inline-block;" placeholder="t2.micro">
+                                            <option value="t2.nano">t2.nano</option>
                                             <option value="t2.micro">t2.micro</option>
-                                            <option value="t3.medium">t3.medium</option>
+                                            <option value="t2.small">t2.small</option>
+                                            <option value="t2.medium">t2.medium</option>
+                                            <option value="t2.large">t2.large</option>
+                                            <option value="t2.xlarge">t2.xlarge</option>
+                                            <option value="t2.2xlarge">t2.2xlarge</option>
+
+                                            <option value="m4.large">m4.large</option>
+                                            <option value="m4.xlarge">m4.xlarge</option>
+                                            <option value="m4.2xlarge">m4.2xlarge</option>
+                                            <option value="m4.4xlarge">m4.4xlarge</option>
+                                            <option value="m4.10xlarge">m4.10xlarge</option>
+                                            <option value="m4.16xlarge">m4.16xlarge</option>
+
+                                            <option value="c4.large">c4.large</option>
+                                            <option value="c4.xlarge">c4.xlarge</option>
+                                            <option value="c4.2xlarge">c4.2xlarge</option>
+                                            <option value="c4.4xlarge">c4.4xlarge</option>
+                                            <option value="c4.8xlarge">c4.8xlarge</option>
+
+                                            <option value="x1.16xlarge">x1.16xlarge</option>
+                                            <option value="x1.32xlarge">x1.32xlarge</option>
+
+                                            <option value="r3.large">r3.large</option>
                                             <option value="r3.xlarge">r3.xlarge</option>
+                                            <option value="r3.2xlarge">r3.2xlarge</option>
+                                            <option value="r3.4xlarge">r3.4xlarge</option>
+                                            <option value="r3.8xlarge">r3.8xlarge</option>
+
+                                            <option value="r4.large">r4.large</option>
+                                            <option value="r4.xlarge">r4.xlarge</option>
+                                            <option value="r4.2xlarge">r4.2xlarge</option>
+                                            <option value="r4.4xlarge">r4.4xlarge</option>
+                                            <option value="r4.8xlarge">r4.8xlarge</option>
+                                            <option value="r4.16xlarge">r4.16xlarge</option>
+
+                                            <option value="i2.xlarge">i2.xlarge</option>
+                                            <option value="i2.2xlarge">i2.2xlarge</option>
+                                            <option value="i2.4xlarge">i2.4xlarge</option>
+                                            <option value="i2.8xlarge">i2.8xlarge</option>
+
+                                            <option value="d2.xlarge">d2.xlarge</option>
+                                            <option value="d2.2xlarge">d2.2xlarge</option>
+                                            <option value="d2.4xlarge">d2.4xlarge</option>
+                                            <option value="d2.8xlarge">d2.8xlarge</option>
                                         </select>
                                     </div>
                                 </div>
                                 <div class="form-group">
-                                    <span class="col-sm-6 col-xs-offset-3">
+                                    <span class="col-sm-9 col-xs-offset-3">
                                         <div style="display: inline-block;">
                                             <input type="checkbox" id="new-config-spot" value="">
                                             <label for="new-config-spot">Spot Instance?</label>
@@ -1376,7 +1419,7 @@
                                         <div style="display: inline-block;">
                                             <input class="form-control" id="new-config-spot-bid" name="bid" style="width: 70px;" placeholder="0.05">
                                         </div>
-                                        <span class="glyphicon glyphicon-question-sign" style="color: lightgrey" data-toggle="tooltip" data-placement="top" title="Should this instance be a spot instance and the max bid for the spot instance."></span>
+                                        <span class="glyphicon glyphicon-question-sign" style="color: lightgrey" data-toggle="tooltip" data-placement="top" title="Indicates if this instance should be started as a spot instance and what the maximum bid to placed should be."></span>
                                     </span>
                                 </div>
                                 <div class="form-group">
